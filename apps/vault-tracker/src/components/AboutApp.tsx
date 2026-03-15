@@ -33,21 +33,33 @@ export function AboutApp() {
         </div>
       </div>
 
-      <div className="pt-10 border-t border-border/50 text-center space-y-6">
+      <div className="pt-10 border-t border-border/50 text-center space-y-8">
         <div className="flex justify-center items-center gap-2 text-sm font-semibold text-muted-foreground">
           Built with <Heart className="w-4 h-4 text-red-500 fill-red-500" /> by 
           <span className="text-foreground">Vault Tracker Makers</span>
         </div>
 
-        <div className="space-y-1">
-          <p className="text-xs uppercase font-bold tracking-[0.2em] text-muted-foreground/50">Copyrights</p>
-          <p className="font-bold text-lg">© 2026 Nrupal Akolkar</p>
+        <div className="flex flex-col items-center gap-6">
+          <a href="https://buymeacoffee.com/nrupalakolt" target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-3 bg-[#FFDD00] text-black px-6 py-3 rounded-2xl font-bold shadow-lg hover:scale-105 transition-transform">
+            ☕ Buy me a coffee
+          </a>
+
+          <div className="flex justify-center gap-4">
+             <a href="https://github.com/nrupala/vault-tracker" target="_blank" className="flex items-center gap-2 p-3 bg-secondary rounded-xl hover:bg-primary/10 hover:text-primary transition-all text-sm font-bold">
+               <Github className="w-6 h-6" /> View Source on GitHub
+             </a>
+          </div>
         </div>
 
-        <div className="flex justify-center gap-4">
-           <a href="#" className="p-3 bg-secondary rounded-xl hover:bg-primary/10 hover:text-primary transition-all">
-             <Github className="w-6 h-6" />
-           </a>
+        <div className="space-y-4">
+          <div className="text-[10px] font-bold tracking-widest uppercase opacity-40 flex justify-center items-center gap-2">
+            Proudly Built in Canada <span className="text-red-500 text-base">🍁</span>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs uppercase font-bold tracking-[0.2em] text-muted-foreground/50">Copyrights</p>
+            <p className="font-bold text-lg text-muted-foreground/80">© 2026 Nrupal Akolkar</p>
+          </div>
         </div>
       </div>
     </div>

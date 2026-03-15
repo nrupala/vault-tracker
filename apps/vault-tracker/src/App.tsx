@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Lock, KeyRound, Plus } from 'lucide-react';
+import { Shield, Lock, KeyRound, Plus, Github, Heart } from 'lucide-react';
 import { ThemeProvider } from './components/ThemeProvider';
 import { useVault, VaultProvider } from '@vault/core';
 import { NotesApp } from './components/NotesApp';
@@ -180,6 +180,44 @@ function VaultManager({ onUnlock }: { onUnlock: () => void }) {
              </button>
           </div>
         )}
+      </motion.div>
+
+      {/* Intro Banner - Only on Login */}
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="mt-12 w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-6"
+      >
+        <div className="bg-card/50 backdrop-blur-sm border border-border p-6 rounded-2xl space-y-3">
+          <h3 className="font-bold text-lg flex items-center gap-2">
+            <Shield className="w-5 h-5 text-primary" /> Security Model
+          </h3>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            VaultTracker uses **AES-256-GCM** encryption locally in your browser. Your data never leaves your device unencrypted. Zero-trust, zero-knowledge, and 100% private.
+          </p>
+        </div>
+
+        <div className="bg-card/50 backdrop-blur-sm border border-border p-6 rounded-2xl space-y-3">
+          <h3 className="font-bold text-lg flex items-center gap-2">
+            <Lock className="w-5 h-5 text-orange-500" /> Financial Intelligence
+          </h3>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Advanced spending analysis helps you track Needs vs. Wants with proactive alerts on category spikes. All processed entirely on your machine.
+          </p>
+        </div>
+
+        <div className="md:col-span-2 flex flex-wrap items-center justify-center gap-6 pt-4">
+          <a href="https://github.com/nrupala/vault-tracker" target="_blank" className="text-xs font-bold text-muted-foreground hover:text-primary transition-colors flex items-center gap-2">
+            <Github className="w-4 h-4" /> View Source on GitHub
+          </a>
+          <a href="https://buymeacoffee.com/nrupalakolt" target="_blank" className="text-xs font-bold text-[#FFDD00] hover:scale-105 transition-transform flex items-center gap-2">
+            <Heart className="w-4 h-4 fill-red-500 text-red-500" /> Buy Me a Coffee
+          </a>
+          <div className="text-[10px] font-bold tracking-widest uppercase opacity-40 flex items-center gap-2">
+            Made in Canada <span className="text-red-500">🍁</span>
+          </div>
+        </div>
       </motion.div>
     </div>
   );
