@@ -11,6 +11,8 @@ build/
 # Capacitor
 android/
 ios/
+!apps/*/android/
+!apps/*/ios/
 www/
 
 # IDEs
