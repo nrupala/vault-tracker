@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useItems, DecryptedItem } from '@vault/core';
+import { useItems, type DecryptedItem } from '@vault/core';
 import { ContainerItem } from './ContainerItem';
 import { Activity, Plus, Target, Flame } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -15,7 +15,7 @@ export function HabitsApp({ vaultId, encryptionKey }: { vaultId: string, encrypt
   const { items, createItem, updateItem, deleteItem, exportData } = useItems(vaultId, encryptionKey);
 
   useEffect(() => {
-    const handleExport = (e: any) => exportData(e.detail);
+    const handleExport = (e: any) => exportData((e as CustomEvent).detail);
     window.addEventListener('vault-export', handleExport);
     return () => window.removeEventListener('vault-export', handleExport);
   }, [exportData]);
@@ -25,7 +25,7 @@ export function HabitsApp({ vaultId, encryptionKey }: { vaultId: string, encrypt
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
 
-  const habits = items.filter(i => i.type === 'habit');
+  const habits = items.filter((i: DecryptedItem) => i.type === 'habit');
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,7 +37,7 @@ export function HabitsApp({ vaultId, encryptionKey }: { vaultId: string, encrypt
   };
 
   const handleUpdateTitle = async (id: string, newTitle: string) => {
-    const habit = items.find(i => i.id === id);
+    const habit = items.find((i: DecryptedItem) => i.id === id);
     if (!habit) return;
     await updateItem(id, {
       payload: { ...habit.payload, title: newTitle }
@@ -137,7 +137,7 @@ export function HabitsApp({ vaultId, encryptionKey }: { vaultId: string, encrypt
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
         <AnimatePresence mode="popLayout">
-          {habits.map(habit => {
+          {habits.map((habit: DecryptedItem) => {
             const payload = habit.payload as HabitPayload;
             const checkedToday = isToday(payload.lastCheckedIn);
             const isEditing = editingId === habit.id;

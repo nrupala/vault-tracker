@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useItems } from '@vault/core';
+import { useItems, type DecryptedItem } from '@vault/core';
 import { BarChart3, TrendingUp, CheckCircle2, Flame, Award, Zap, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -7,36 +7,36 @@ export function AnalyticsApp({ vaultId, encryptionKey }: { vaultId: string, encr
   const { items } = useItems(vaultId, encryptionKey);
 
   const stats = useMemo(() => {
-    const tasks = items.filter(i => i.type === 'task');
-    const habits = items.filter(i => i.type === 'habit');
-    const notes = items.filter(i => i.type === 'note');
+    const tasks = items.filter((i: DecryptedItem) => i.type === 'task');
+    const habits = items.filter((i: DecryptedItem) => i.type === 'habit');
+    const notes = items.filter((i: DecryptedItem) => i.type === 'note');
 
-    const completedTasks = tasks.filter(t => (t.payload as any).isCompleted).length;
+    const completedTasks = tasks.filter((t: DecryptedItem) => (t.payload as any).isCompleted).length;
     const taskCompletionRate = tasks.length > 0 ? Math.round((completedTasks / tasks.length) * 100) : 0;
 
-    const totalStreaks = habits.reduce((acc, h) => acc + ((h.payload as any).streak || 0), 0);
+    const totalStreaks = habits.reduce((acc: number, h: DecryptedItem) => acc + ((h.payload as any).streak || 0), 0);
     const avgStreak = habits.length > 0 ? Math.round(totalStreaks / habits.length) : 0;
-    const maxStreak = habits.length > 0 ? Math.max(...habits.map(h => (h.payload as any).streak || 0)) : 0;
+    const maxStreak = habits.length > 0 ? Math.max(...habits.map((h: DecryptedItem) => (h.payload as any).streak || 0)) : 0;
 
-    const priorityDist = tasks.reduce((acc: any, t) => {
+    const priorityDist = tasks.reduce((acc: Record<string, number>, t: DecryptedItem) => {
       acc[t.priority] = (acc[t.priority] || 0) + 1;
       return acc;
-    }, {});
+    }, {} as Record<string, number>);
 
-    const expenses = items.filter(i => i.type === 'expense');
-    const debits = expenses.filter(e => (e.payload as any).entryType === 'debit');
-    const incomeTotal = expenses.filter(e => (e.payload as any).entryType === 'credit').reduce((acc, e) => acc + (e.payload as any).amount, 0);
-    const expenseTotal = debits.reduce((acc, e) => acc + (e.payload as any).amount, 0);
+    const expenses = items.filter((i: DecryptedItem) => i.type === 'expense');
+    const debits = expenses.filter((e: DecryptedItem) => (e.payload as any).entryType === 'debit');
+    const incomeTotal = expenses.filter((e: DecryptedItem) => (e.payload as any).entryType === 'credit').reduce((acc: number, e: DecryptedItem) => acc + (e.payload as any).amount, 0);
+    const expenseTotal = debits.reduce((acc: number, e: DecryptedItem) => acc + (e.payload as any).amount, 0);
 
-    const needsTotal = debits.filter(e => (e.payload as any).classification === 'need').reduce((acc, e) => acc + (e.payload as any).amount, 0);
-    const wantsTotal = debits.filter(e => (e.payload as any).classification === 'want').reduce((acc, e) => acc + (e.payload as any).amount, 0);
+    const needsTotal = debits.filter((e: DecryptedItem) => (e.payload as any).classification === 'need').reduce((acc: number, e: DecryptedItem) => acc + (e.payload as any).amount, 0);
+    const wantsTotal = debits.filter((e: DecryptedItem) => (e.payload as any).classification === 'want').reduce((acc: number, e: DecryptedItem) => acc + (e.payload as any).amount, 0);
 
     // Anomaly Detection: Categories taking > 30% of total expenses or having huge individual hits
-    const catTotals = debits.reduce((acc: any, e) => {
+    const catTotals = debits.reduce((acc: Record<string, number>, e: DecryptedItem) => {
       const cat = (e.payload as any).category || 'General';
       acc[cat] = (acc[cat] || 0) + (e.payload as any).amount;
       return acc;
-    }, {});
+    }, {} as Record<string, number>);
 
     const spikes = Object.entries(catTotals)
       .filter(([_, total]) => (total as number) > (expenseTotal * 0.3) && expenseTotal > 0)
@@ -161,7 +161,7 @@ export function AnalyticsApp({ vaultId, encryptionKey }: { vaultId: string, encr
                   <TrendingUp className="w-4 h-4" /> Financial Alerts
                 </div>
                 <div className="space-y-1">
-                  {stats.financeStats.spikes.map(cat => (
+                  {stats.financeStats.spikes.map((cat: string) => (
                     <p key={cat} className="text-xs font-medium text-red-600">
                       ⚠️ Spike detected in <span className="font-black uppercase">{cat}</span> ({'>'}30% of spend).
                     </p>
@@ -180,7 +180,7 @@ export function AnalyticsApp({ vaultId, encryptionKey }: { vaultId: string, encr
           </div>
           <div className="space-y-4">
             {['critical', 'high', 'medium', 'low'].map(p => {
-              const count = stats.priorityDist[p] || 0;
+              const count = (stats.priorityDist as Record<string, number>)[p] || 0;
               const percent = stats.taskStats.total > 0 ? Math.round((count / stats.taskStats.total) * 100) : 0;
               const pColors: any = {
                 critical: 'bg-red-500',

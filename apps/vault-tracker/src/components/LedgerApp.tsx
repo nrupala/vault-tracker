@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Plus, Download, Upload, TrendingDown, TrendingUp, Wallet, Tag, FileText, Search } from 'lucide-react';
-import { useItems } from '@vault/core';
+import { useItems, type DecryptedItem } from '@vault/core';
 import { format } from 'date-fns';
 import Papa from 'papaparse';
 
@@ -36,15 +36,15 @@ export function LedgerApp({ vaultId, encryptionKey }: LedgerAppProps) {
 
   const expenseItems = useMemo(() => {
     const list = items
-      .filter(item => item.type === 'expense')
-      .map(item => ({
+      .filter((item: DecryptedItem) => item.type === 'expense')
+      .map((item: DecryptedItem) => ({
         ...item,
         payload: item.payload as ExpensePayload
       }))
       .sort((a, b) => a.createdAt - b.createdAt); // Order by creation for standing balance
 
     let runningBalance = 0;
-    return list.map(item => {
+    return list.map((item: DecryptedItem & { payload: ExpensePayload }) => {
       if (item.payload.entryType === 'credit') {
         runningBalance += item.payload.amount;
       } else {
@@ -100,11 +100,11 @@ export function LedgerApp({ vaultId, encryptionKey }: LedgerAppProps) {
   };
 
   const totals = useMemo(() => {
-    return expenseItems.reduce((acc, item) => {
+    return expenseItems.reduce((acc: { income: number; expenses: number }, item: DecryptedItem & { payload: ExpensePayload }) => {
       if (item.payload.entryType === 'credit') acc.income += item.payload.amount;
       else acc.expenses += item.payload.amount;
       return acc;
-    }, { income: 0, expenses: 0 });
+    }, { income: 0, expenses: 0 } as { income: number; expenses: number });
   }, [expenseItems]);
 
   return (
@@ -297,7 +297,7 @@ export function LedgerApp({ vaultId, encryptionKey }: LedgerAppProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {expenseItems.map((item) => {
+               {expenseItems.map((item: DecryptedItem & { payload: ExpensePayload, balance: number }) => {
                 const isHighSpend = item.payload.entryType === 'debit' && item.payload.amount > 500;
                 return (
                   <tr key={item.id} className={`hover:bg-muted/30 transition-colors group ${isHighSpend ? 'bg-red-500/5' : ''}`}>

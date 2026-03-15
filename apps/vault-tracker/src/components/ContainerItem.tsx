@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Share2, Clock, MoreVertical, Trash2, Edit2, Copy, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { DecryptedItem } from '../hooks/useItems';
+import { DecryptedItem } from '@vault/core';
 
 interface ContainerItemProps {
   item: DecryptedItem;
@@ -59,7 +59,7 @@ export function ContainerItem({ item, children, onUpdate, onDelete }: ContainerI
     setShowMenu(false);
   };
 
-  const priorityColors = {
+  const priorityColors: Record<string, string> = {
     low: 'bg-blue-500/10 text-blue-500',
     medium: 'bg-yellow-500/10 text-yellow-500',
     high: 'bg-orange-500/10 text-orange-500',
@@ -77,7 +77,7 @@ export function ContainerItem({ item, children, onUpdate, onDelete }: ContainerI
           <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${priorityColors[item.priority]}`}>
             {item.priority}
           </span>
-          {item.tags.map(tag => (
+          {item.tags.map((tag: string) => (
             <span key={tag} className="text-[10px] text-muted-foreground bg-secondary/50 px-2 py-0.5 rounded-full font-medium">
               #{tag}
             </span>

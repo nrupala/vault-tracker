@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useItems } from '@vault/core';
+import { useItems, type DecryptedItem } from '@vault/core';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, CheckCircle2, Target } from 'lucide-react';
 
 export function CalendarApp({ vaultId, encryptionKey }: { vaultId: string, encryptionKey: CryptoKey }) {
@@ -23,7 +23,7 @@ export function CalendarApp({ vaultId, encryptionKey }: { vaultId: string, encry
       const date = new Date(year, month, i);
       const dayItems: any[] = [];
 
-      items.forEach(item => {
+      items.forEach((item: DecryptedItem) => {
         if (item.type === 'habit') {
           const history = (item.payload as any).checkedInDays || [];
           const matched = history.some((timestamp: number) => {
@@ -42,7 +42,7 @@ export function CalendarApp({ vaultId, encryptionKey }: { vaultId: string, encry
         }
       });
 
-      const score = dayItems.reduce((acc, item) => {
+      const score = dayItems.reduce((acc: number, item: any) => {
         if (item.type === 'task' && (item.payload as any).isCompleted) return acc + 2;
         if (item.type === 'habit') return acc + 3;
         if (item.type === 'note') return acc + 1;
@@ -99,7 +99,7 @@ export function CalendarApp({ vaultId, encryptionKey }: { vaultId: string, encry
           </div>
         ))}
         
-        {calendarData.map((d: any, i) => {
+        {calendarData.map((d: any, i: number) => {
           const heatColors = [
             'bg-card',
             'bg-emerald-500/5',

@@ -115,7 +115,7 @@ function VaultManager({ onUnlock }: { onUnlock: () => void }) {
                   onChange={(e) => setSelectedVaultId(e.target.value)}
                   className="w-full bg-background text-foreground border border-border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 >
-                  {vaults.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  {vaults.map((v: any) => <option key={v.id} value={v.id}>{v.name}</option>)}
                 </select>
               </motion.div>
             )}

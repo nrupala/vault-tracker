@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useItems, DecryptedItem } from '@vault/core';
+import { useItems, type DecryptedItem } from '@vault/core';
 import { ContainerItem } from './ContainerItem';
 import { CheckSquare, Plus, Circle, CheckCircle2, Hash, X as CloseIcon, Calendar, Bell, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -21,7 +21,7 @@ export function TasksApp({ vaultId, encryptionKey }: { vaultId: string, encrypti
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
 
   useEffect(() => {
-    const handleExport = (e: any) => exportData(e.detail);
+    const handleExport = (e: any) => exportData((e as CustomEvent).detail);
     window.addEventListener('vault-export', handleExport);
     return () => window.removeEventListener('vault-export', handleExport);
   }, [exportData]);
@@ -33,7 +33,7 @@ export function TasksApp({ vaultId, encryptionKey }: { vaultId: string, encrypti
     }
   }, []);
 
-  const tasks = items.filter(i => i.type === 'task');
+  const tasks = items.filter((i: DecryptedItem) => i.type === 'task');
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,7 +76,7 @@ export function TasksApp({ vaultId, encryptionKey }: { vaultId: string, encrypti
   };
 
   const removeTag = (tag: string) => {
-    setNewTags(newTags.filter(t => t !== tag));
+    setNewTags(newTags.filter((t: string) => t !== tag));
   };
 
   const toggleTask = async (task: DecryptedItem) => {
@@ -155,7 +155,7 @@ export function TasksApp({ vaultId, encryptionKey }: { vaultId: string, encrypti
 
         <div className="flex flex-col gap-3 px-1">
           <div className="flex flex-wrap gap-2">
-            {newTags.map(tag => (
+            {newTags.map((tag: string) => (
               <span key={tag} className="flex items-center gap-1 bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full">
                 <Hash className="w-2.5 h-2.5" />
                 {tag}
@@ -197,7 +197,7 @@ export function TasksApp({ vaultId, encryptionKey }: { vaultId: string, encrypti
 
       <div className="space-y-3">
         <AnimatePresence>
-          {tasks.map(task => {
+          {tasks.map((task: DecryptedItem) => {
             const payload = task.payload as TaskPayload;
             const isCompleted = payload.isCompleted;
             const dueStatus = getDueStatus(payload.dueDate);

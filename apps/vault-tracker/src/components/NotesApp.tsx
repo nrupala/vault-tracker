@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useItems } from '@vault/core';
+import { useItems, type DecryptedItem } from '@vault/core';
 import { ContainerItem } from './ContainerItem';
 import { PenLine, Plus, X as CloseIcon, Hash, Mic, Bold, Italic, List, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -24,7 +24,7 @@ export function NotesApp({ vaultId, encryptionKey }: { vaultId: string, encrypti
   const [isPreview, setIsPreview] = useState(false);
 
   useEffect(() => {
-    const handleExport = (e: any) => exportData(e.detail);
+    const handleExport = (e: any) => exportData((e as CustomEvent).detail);
     window.addEventListener('vault-export', handleExport);
     return () => window.removeEventListener('vault-export', handleExport);
   }, [exportData]);
@@ -143,7 +143,7 @@ export function NotesApp({ vaultId, encryptionKey }: { vaultId: string, encrypti
   };
 
   const removeTag = (tag: string) => {
-    setNewTags(newTags.filter(t => t !== tag));
+    setNewTags(newTags.filter((t: string) => t !== tag));
   };
 
   const handleVoiceDictation = () => {
@@ -164,7 +164,7 @@ export function NotesApp({ vaultId, encryptionKey }: { vaultId: string, encrypti
 
     recognition.onresult = (event: any) => {
       const transcript = event.results[0][0].transcript;
-      setNewContent(prev => prev + (prev ? ' ' : '') + transcript);
+      setNewContent((prev: string) => prev + (prev ? ' ' : '') + transcript);
       
       // Smart Auto-Title
       if (!newTitle.trim()) {
@@ -177,7 +177,7 @@ export function NotesApp({ vaultId, encryptionKey }: { vaultId: string, encrypti
     recognition.start();
   };
 
-  const notes = items.filter(i => i.type === 'note');
+  const notes = items.filter((i: DecryptedItem) => i.type === 'note');
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -267,7 +267,7 @@ export function NotesApp({ vaultId, encryptionKey }: { vaultId: string, encrypti
             
             <div className="space-y-3 pt-2 border-t border-border/50">
                <div className="flex flex-wrap gap-2">
-                 {newTags.map(tag => (
+                 {newTags.map((tag: string) => (
                    <span key={tag} className="flex items-center gap-1 bg-primary/10 text-primary text-xs font-bold px-2 py-1 rounded-full">
                      <Hash className="w-3 h-3" />
                      {tag}
@@ -327,7 +327,7 @@ export function NotesApp({ vaultId, encryptionKey }: { vaultId: string, encrypti
 
       <div className="space-y-4">
         <AnimatePresence>
-          {notes.map(note => (
+          {notes.map((note: DecryptedItem) => (
             <ContainerItem 
               key={note.id} 
               item={note} 
