@@ -146,10 +146,18 @@
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
+    min-height: 100dvh;
+    min-height: -webkit-fill-available;
     transition: background-color 300ms, color 300ms;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  #root {
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
   }
 
   /* Workflowy-style Outliner Lines */

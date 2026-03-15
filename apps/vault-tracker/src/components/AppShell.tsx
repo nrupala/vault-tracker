@@ -43,7 +43,7 @@ export function AppShell({ children, activeTab, onTabChange }: AppShellProps) {
   ];
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden relative text-foreground">
+    <div className="flex h-dvh bg-background overflow-hidden relative text-foreground">
       {/* Mobile Sidebar Overlay */}
       <AnimatePresence>
         {isSidebarOpen && (
@@ -103,7 +103,7 @@ export function AppShell({ children, activeTab, onTabChange }: AppShellProps) {
           })}
         </nav>
 
-        <div className="p-4 mt-auto border-t border-border space-y-4">
+        <div className="p-4 mt-auto border-t border-border space-y-4 pb-[env(safe-area-inset-bottom)]">
           <div className="space-y-1">
             <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Settings</p>
             <div className="space-y-1">
@@ -171,16 +171,16 @@ export function AppShell({ children, activeTab, onTabChange }: AppShellProps) {
         {/* Mobile Bottom Navigation */}
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-card/80 backdrop-blur-xl border-t border-border z-50 pb-[env(safe-area-inset-bottom)]">
           <nav className="flex items-center justify-around h-16">
-            {navItems.filter(i => ['notes', 'tasks', 'habits', 'ledger'].includes(i.id)).map((item) => {
+            {navItems.filter(i => ['notes', 'tasks', 'habits', 'ledger', 'about'].includes(i.id)).map((item) => {
               const isActive = activeTab === item.id;
               return (
                 <button
                   key={item.id}
                   onClick={() => onTabChange(item.id)}
-                  className={`flex flex-col items-center gap-1 w-full py-1 transition-all ${isActive ? 'text-primary scale-110' : 'text-muted-foreground'}`}
+                  className={`flex flex-col items-center gap-1 w-full py-1 transition-all ${isActive ? 'text-primary' : 'text-muted-foreground'}`}
                 >
                   <item.icon className={`w-5 h-5 ${item.color} ${isActive ? 'opacity-100' : 'opacity-60'}`} />
-                  <span className="text-[10px] font-bold uppercase tracking-tighter">{item.label}</span>
+                  <span className="text-[9px] font-bold uppercase tracking-tighter">{item.label}</span>
                 </button>
               )
             })}
