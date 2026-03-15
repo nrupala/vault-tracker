@@ -22,7 +22,7 @@ export interface Vault {
 export interface EncryptedItem {
   id: string; // UUID of the item itself
   vaultId: string; // References Vault.id
-  type: 'note' | 'task' | 'habit';
+  type: 'note' | 'task' | 'habit' | 'expense';
   createdAt: number;
   updatedAt: number;
   priority: 'low' | 'medium' | 'high' | 'critical';

@@ -11,12 +11,13 @@ import {
   Lock,
   BarChart3,
   Calendar,
-  Info
+  Info,
+  Wallet
 } from 'lucide-react';
 import { useTheme, Theme } from './ThemeProvider';
 import { useVault } from '../hooks/useVault';
 
-export type ActiveTab = 'notes' | 'tasks' | 'habits' | 'analytics' | 'calendar' | 'about';
+export type ActiveTab = 'notes' | 'tasks' | 'habits' | 'analytics' | 'calendar' | 'ledger' | 'about';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -36,6 +37,7 @@ export function AppShell({ children, activeTab, onTabChange }: AppShellProps) {
     { id: 'tasks' as ActiveTab, icon: CheckSquare, label: 'Tasks', color: 'text-green-500' },
     { id: 'habits' as ActiveTab, icon: Activity, label: 'Habits', color: 'text-purple-500' },
     { id: 'calendar' as ActiveTab, icon: Calendar, label: 'Calendar', color: 'text-rose-500' },
+    { id: 'ledger' as ActiveTab, icon: Wallet, label: 'Ledger', color: 'text-amber-500' },
     { id: 'analytics' as ActiveTab, icon: BarChart3, label: 'Analytics', color: 'text-orange-500' },
     { id: 'about' as ActiveTab, icon: Info, label: 'About', color: 'text-primary' },
   ];
@@ -169,7 +171,7 @@ export function AppShell({ children, activeTab, onTabChange }: AppShellProps) {
         {/* Mobile Bottom Navigation */}
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-card/80 backdrop-blur-xl border-t border-border z-50 pb-[env(safe-area-inset-bottom)]">
           <nav className="flex items-center justify-around h-16">
-            {navItems.slice(0, 4).map((item) => {
+            {navItems.filter(i => ['notes', 'tasks', 'habits', 'ledger'].includes(i.id)).map((item) => {
               const isActive = activeTab === item.id;
               return (
                 <button

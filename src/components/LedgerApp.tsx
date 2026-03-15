@@ -1,0 +1,319 @@
+import { useState, useMemo } from 'react';
+import { Plus, Download, Upload, TrendingDown, TrendingUp, Wallet, Tag, FileText, Search } from 'lucide-react';
+import { useItems } from '../hooks/useItems';
+import { format } from 'date-fns';
+import Papa from 'papaparse';
+
+interface ExpensePayload {
+  description: string;
+  amount: number;
+  entryType: 'debit' | 'credit';
+  category: string;
+  notes: string;
+}
+
+interface LedgerAppProps {
+  vaultId: string;
+  encryptionKey: CryptoKey;
+}
+
+export function LedgerApp({ vaultId, encryptionKey }: LedgerAppProps) {
+  const { items, createItem } = useItems(vaultId, encryptionKey);
+
+  const [newDescription, setNewDescription] = useState('');
+  const [newAmount, setNewAmount] = useState('');
+  const [entryType, setEntryType] = useState<'debit' | 'credit'>('debit');
+  const [newCategory, setNewCategory] = useState('');
+  const [newNotes, setNewNotes] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const expenseItems = useMemo(() => {
+    const list = items
+      .filter(item => item.type === 'expense')
+      .map(item => ({
+        ...item,
+        payload: item.payload as ExpensePayload
+      }))
+      .sort((a, b) => a.createdAt - b.createdAt); // Order by creation for standing balance
+
+    let runningBalance = 0;
+    return list.map(item => {
+      if (item.payload.entryType === 'credit') {
+        runningBalance += item.payload.amount;
+      } else {
+        runningBalance -= item.payload.amount;
+      }
+      return { ...item, balance: runningBalance };
+    }).reverse(); // Show latest at top in UI
+  }, [items]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDescription || !newAmount) return;
+
+    await createItem('expense', {
+      description: newDescription,
+      amount: parseFloat(newAmount),
+      entryType,
+      category: newCategory || 'General',
+      notes: newNotes
+    }, [newCategory].filter(Boolean));
+
+    setNewDescription('');
+    setNewAmount('');
+    setNewCategory('');
+    setNewNotes('');
+  };
+
+  const handleCsvImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        for (const row of results.data as any) {
+          const amount = parseFloat(row.Amount || row.amount || 0);
+          if (isNaN(amount)) continue;
+
+          await createItem('expense', {
+            description: row.Description || row.description || 'Imported Transaction',
+            amount: Math.abs(amount),
+            entryType: amount >= 0 ? 'credit' : 'debit',
+            category: row.Category || row.category || 'Imported',
+            notes: row.Notes || row.notes || ''
+          }, [row.Category || row.category].filter(Boolean));
+        }
+      }
+    });
+  };
+
+  const totals = useMemo(() => {
+    return expenseItems.reduce((acc, item) => {
+      if (item.payload.entryType === 'credit') acc.income += item.payload.amount;
+      else acc.expenses += item.payload.amount;
+      return acc;
+    }, { income: 0, expenses: 0 });
+  }, [expenseItems]);
+
+  return (
+    <div className="space-y-6 max-w-6xl mx-auto px-4 pb-20">
+      {/* Header & Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-card border border-border p-6 rounded-2xl shadow-sm flex items-center gap-4">
+          <div className="p-3 bg-primary/10 rounded-xl text-primary">
+            <Wallet className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Net Balance</p>
+            <p className={`text-2xl font-black ${(totals.income - totals.expenses) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+              ${(totals.income - totals.expenses).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-card border border-border p-6 rounded-2xl shadow-sm flex items-center gap-4">
+          <div className="p-3 bg-green-500/10 rounded-xl text-green-500">
+            <TrendingUp className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Total Income</p>
+            <p className="text-2xl font-black text-green-500">
+              +${totals.income.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-card border border-border p-6 rounded-2xl shadow-sm flex items-center gap-4">
+          <div className="p-3 bg-red-500/10 rounded-xl text-red-500">
+            <TrendingDown className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Total Expenses</p>
+            <p className="text-2xl font-black text-red-500">
+              -${totals.expenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Manual Entry Form */}
+      <div className="bg-card border border-border rounded-2xl p-6 shadow-sm overflow-hidden">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="md:col-span-2 space-y-2">
+              <label className="text-xs font-bold uppercase text-muted-foreground ml-1">Description</label>
+              <input 
+                type="text" 
+                placeholder="Grocery shopping, Salary, Rent..."
+                value={newDescription}
+                onChange={(e) => setNewDescription(e.target.value)}
+                className="w-full bg-secondary/50 border border-border/50 rounded-xl px-4 py-2.5 outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase text-muted-foreground ml-1">Amount</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">$</span>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  placeholder="0.00"
+                  value={newAmount}
+                  onChange={(e) => setNewAmount(e.target.value)}
+                  className="w-full bg-secondary/50 border border-border/50 rounded-xl pl-8 pr-4 py-2.5 outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase text-muted-foreground ml-1">Type</label>
+              <div className="flex bg-secondary/50 rounded-xl p-1 border border-border/50">
+                <button 
+                  type="button"
+                  onClick={() => setEntryType('debit')}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${entryType === 'debit' ? 'bg-red-500 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  DEBIT
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setEntryType('credit')}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${entryType === 'credit' ? 'bg-green-500 text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  CREDIT
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase text-muted-foreground ml-1 flex items-center gap-1">
+                <Tag className="w-3 h-3" /> Category
+              </label>
+              <input 
+                type="text" 
+                placeholder="Food, Housing, Work..."
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value)}
+                className="w-full bg-secondary/50 border border-border/50 rounded-xl px-4 py-2.5 outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <div className="md:col-span-1 space-y-2">
+              <label className="text-xs font-bold uppercase text-muted-foreground ml-1 flex items-center gap-1">
+                <FileText className="w-3 h-3" /> Notes
+              </label>
+              <input 
+                type="text" 
+                placeholder="Optional notes..."
+                value={newNotes}
+                onChange={(e) => setNewNotes(e.target.value)}
+                className="w-full bg-secondary/50 border border-border/50 rounded-xl px-4 py-2.5 outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <div className="flex items-end">
+              <button 
+                type="submit"
+                className="w-full bg-primary text-primary-foreground font-black py-2.5 rounded-xl hover:bg-primary/90 transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
+              >
+                <Plus className="w-5 h-5" /> ADD TO LEDGER
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      {/* Ledger Table Section */}
+      <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-border bg-muted/30 flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+            <Search className="w-4 h-4 text-muted-foreground" />
+            <input 
+              type="text"
+              placeholder="Search Ledger..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-transparent text-sm outline-none flex-1"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="cursor-pointer bg-secondary hover:bg-secondary/80 text-foreground px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all">
+              <Upload className="w-4 h-4" />
+              IMPORT CSV
+              <input type="file" accept=".csv" onChange={handleCsvImport} className="hidden" />
+            </label>
+            <button className="bg-secondary hover:bg-secondary/80 text-foreground px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all">
+              <Download className="w-4 h-4" />
+              EXPORT
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-muted/50 text-muted-foreground text-[10px] uppercase tracking-[0.2em] font-black border-b border-border">
+                <th className="px-6 py-4">Date</th>
+                <th className="px-6 py-4">Category</th>
+                <th className="px-6 py-4">Description</th>
+                <th className="px-6 py-4 text-right">Debit</th>
+                <th className="px-6 py-4 text-right">Credit</th>
+                <th className="px-6 py-4 text-right bg-primary/5 text-primary">Balance</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/50">
+              {expenseItems.map((item) => (
+                <tr key={item.id} className="hover:bg-muted/30 transition-colors group">
+                  <td className="px-6 py-4 text-xs font-medium text-muted-foreground">
+                    {format(new Date(item.createdAt), 'MMM dd, yyyy')}
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="px-2 py-1 bg-secondary rounded-lg text-[10px] font-black uppercase tracking-wider border border-border/50">
+                      {item.payload.category}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold">{item.payload.description}</span>
+                      {item.payload.notes && <span className="text-[10px] text-muted-foreground">{item.payload.notes}</span>}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    {item.payload.entryType === 'debit' && (
+                      <span className="text-sm font-black text-red-500">
+                        -${item.payload.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    {item.payload.entryType === 'credit' && (
+                      <span className="text-sm font-black text-green-500">
+                        +${item.payload.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-right bg-primary/5">
+                    <span className={`text-sm font-black ${item.balance >= 0 ? 'text-primary' : 'text-red-500'}`}>
+                      ${item.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {expenseItems.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-6 py-20 text-center text-muted-foreground">
+                    <div className="flex flex-col items-center gap-4 opacity-30">
+                      <Wallet className="w-16 h-16" />
+                      <p className="font-bold">No transactions found in this vault.</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -8,6 +8,7 @@ import { TasksApp } from './components/TasksApp';
 import { HabitsApp } from './components/HabitsApp';
 import { AnalyticsApp } from './components/AnalyticsApp';
 import { CalendarApp } from './components/CalendarApp';
+import { LedgerApp } from './components/LedgerApp';
 import { AboutApp } from './components/AboutApp';
 import { AppShell, ActiveTab } from './components/AppShell';
 
@@ -207,6 +208,7 @@ function MainApp() {
         {activeTab === 'habits' && <HabitsApp vaultId={activeVault.id} encryptionKey={encryptionKey} />}
         {activeTab === 'analytics' && <AnalyticsApp vaultId={activeVault.id} encryptionKey={encryptionKey} />}
         {activeTab === 'calendar' && <CalendarApp vaultId={activeVault.id} encryptionKey={encryptionKey} />}
+        {activeTab === 'ledger' && <LedgerApp vaultId={activeVault.id} encryptionKey={encryptionKey} />}
         {activeTab === 'about' && <AboutApp />}
       </motion.div>
     </AppShell>

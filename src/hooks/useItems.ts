@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 export interface DecryptedItem<T = any> {
   id: string;
   vaultId: string;
-  type: 'note' | 'task' | 'habit';
+  type: 'note' | 'task' | 'habit' | 'expense';
   createdAt: number;
   updatedAt: number;
   priority: 'low' | 'medium' | 'high' | 'critical';
@@ -57,7 +57,7 @@ export function useItems(activeVaultId: string | undefined, key: CryptoKey | nul
 
   // Create & Encrypt a new item
   const createItem = async (
-    type: 'note' | 'task' | 'habit',
+    type: 'note' | 'task' | 'habit' | 'expense',
     payload: any,
     tags: string[] = [],
     priority: DecryptedItem['priority'] = 'low'

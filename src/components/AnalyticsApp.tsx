@@ -23,11 +23,16 @@ export function AnalyticsApp({ vaultId, encryptionKey }: { vaultId: string, encr
       return acc;
     }, {});
 
+    const expenses = items.filter(i => i.type === 'expense');
+    const incomeTotal = expenses.filter(e => (e.payload as any).entryType === 'credit').reduce((acc, e) => acc + (e.payload as any).amount, 0);
+    const expenseTotal = expenses.filter(e => (e.payload as any).entryType === 'debit').reduce((acc, e) => acc + (e.payload as any).amount, 0);
+
     return {
       totalItems: items.length,
       taskStats: { total: tasks.length, completed: completedTasks, rate: taskCompletionRate },
       habitStats: { total: habits.length, avgStreak, maxStreak },
       noteCount: notes.length,
+      financeStats: { income: incomeTotal, expenses: expenseTotal, net: incomeTotal - expenseTotal },
       priorityDist
     };
   }, [items]);
@@ -98,6 +103,49 @@ export function AnalyticsApp({ vaultId, encryptionKey }: { vaultId: string, encr
         <div className="bg-card border border-border p-6 rounded-2xl shadow-sm">
           <div className="flex items-center gap-2 mb-6">
             <TrendingUp className="w-5 h-5 text-primary" />
+            <h3 className="font-bold text-lg">Financial Cash Flow</h3>
+          </div>
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-bold uppercase tracking-wider">
+                <span className="text-green-500">Total Income</span>
+                <span>${stats.financeStats.income.toLocaleString()}</span>
+              </div>
+              <div className="h-3 w-full bg-secondary rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${stats.financeStats.income > 0 || stats.financeStats.expenses > 0 ? (stats.financeStats.income / (stats.financeStats.income + stats.financeStats.expenses)) * 100 : 0}%` }}
+                  className="h-full bg-green-500"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-bold uppercase tracking-wider">
+                <span className="text-red-500">Total Expenses</span>
+                <span>${stats.financeStats.expenses.toLocaleString()}</span>
+              </div>
+              <div className="h-3 w-full bg-secondary rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${stats.financeStats.income > 0 || stats.financeStats.expenses > 0 ? (stats.financeStats.expenses / (stats.financeStats.income + stats.financeStats.expenses)) * 100 : 0}%` }}
+                  className="h-full bg-red-500"
+                />
+              </div>
+            </div>
+            <div className="pt-4 border-t border-border mt-4">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-bold">Net Savings</span>
+                <span className={`text-xl font-black ${stats.financeStats.net >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  ${stats.financeStats.net.toLocaleString()}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-card border border-border p-6 rounded-2xl shadow-sm">
+          <div className="flex items-center gap-2 mb-6">
+            <TrendingUp className="w-5 h-5 text-primary" />
             <h3 className="font-bold text-lg">Task Priorities</h3>
           </div>
           <div className="space-y-4">
@@ -128,14 +176,22 @@ export function AnalyticsApp({ vaultId, encryptionKey }: { vaultId: string, encr
             })}
           </div>
         </div>
+      </div>
 
-        <div className="bg-card border border-border p-6 rounded-2xl shadow-sm flex flex-col justify-center items-center text-center">
-            <Shield className="w-16 h-16 text-primary/20 mb-4" />
-            <h3 className="font-bold text-xl mb-2">Zero-Trust Intelligence</h3>
-            <p className="text-sm text-muted-foreground max-w-[280px]">
-              All analytics are calculated on-device. No data ever leaves your browser. Your habits and productivity patterns remain 100% private to you.
+      <div className="bg-card border border-border p-8 rounded-2xl shadow-sm flex flex-col md:flex-row justify-between items-center text-center md:text-left gap-6">
+          <div className="flex-1">
+            <h3 className="font-bold text-xl mb-2 flex items-center gap-2">
+              <Shield className="w-6 h-6 text-primary" />
+              Zero-Trust Intelligence
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              All analytics are calculated on-device. No data ever leaves your browser. Your habits, tasks, and financial patterns remain 100% private.
             </p>
-        </div>
+          </div>
+          <div className="bg-primary/10 px-6 py-4 rounded-2xl border border-primary/20">
+            <p className="text-[10px] uppercase font-bold text-primary mb-1">Total Vault Objects</p>
+            <p className="text-3xl font-black text-primary">{stats.totalItems}</p>
+          </div>
       </div>
     </div>
   );
