@@ -24,15 +24,37 @@ export function AnalyticsApp({ vaultId, encryptionKey }: { vaultId: string, encr
     }, {});
 
     const expenses = items.filter(i => i.type === 'expense');
+    const debits = expenses.filter(e => (e.payload as any).entryType === 'debit');
     const incomeTotal = expenses.filter(e => (e.payload as any).entryType === 'credit').reduce((acc, e) => acc + (e.payload as any).amount, 0);
-    const expenseTotal = expenses.filter(e => (e.payload as any).entryType === 'debit').reduce((acc, e) => acc + (e.payload as any).amount, 0);
+    const expenseTotal = debits.reduce((acc, e) => acc + (e.payload as any).amount, 0);
+
+    const needsTotal = debits.filter(e => (e.payload as any).classification === 'need').reduce((acc, e) => acc + (e.payload as any).amount, 0);
+    const wantsTotal = debits.filter(e => (e.payload as any).classification === 'want').reduce((acc, e) => acc + (e.payload as any).amount, 0);
+
+    // Anomaly Detection: Categories taking > 30% of total expenses or having huge individual hits
+    const catTotals = debits.reduce((acc: any, e) => {
+      const cat = (e.payload as any).category || 'General';
+      acc[cat] = (acc[cat] || 0) + (e.payload as any).amount;
+      return acc;
+    }, {});
+
+    const spikes = Object.entries(catTotals)
+      .filter(([_, total]) => (total as number) > (expenseTotal * 0.3) && expenseTotal > 0)
+      .map(([cat, _]) => cat);
 
     return {
       totalItems: items.length,
       taskStats: { total: tasks.length, completed: completedTasks, rate: taskCompletionRate },
       habitStats: { total: habits.length, avgStreak, maxStreak },
       noteCount: notes.length,
-      financeStats: { income: incomeTotal, expenses: expenseTotal, net: incomeTotal - expenseTotal },
+      financeStats: { 
+        income: incomeTotal, 
+        expenses: expenseTotal, 
+        net: incomeTotal - expenseTotal,
+        needs: needsTotal,
+        wants: wantsTotal,
+        spikes
+      },
       priorityDist
     };
   }, [items]);
@@ -103,43 +125,51 @@ export function AnalyticsApp({ vaultId, encryptionKey }: { vaultId: string, encr
         <div className="bg-card border border-border p-6 rounded-2xl shadow-sm">
           <div className="flex items-center gap-2 mb-6">
             <TrendingUp className="w-5 h-5 text-primary" />
-            <h3 className="font-bold text-lg">Financial Cash Flow</h3>
+            <h3 className="font-bold text-lg">Behavioral Balance</h3>
           </div>
           <div className="space-y-6">
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-bold uppercase tracking-wider">
-                <span className="text-green-500">Total Income</span>
-                <span>${stats.financeStats.income.toLocaleString()}</span>
+                <span className="text-primary font-black">Essentials (Needs)</span>
+                <span>${stats.financeStats.needs.toLocaleString()}</span>
               </div>
-              <div className="h-3 w-full bg-secondary rounded-full overflow-hidden">
+              <div className="h-3 w-full bg-secondary rounded-full overflow-hidden flex">
                 <motion.div 
                   initial={{ width: 0 }}
-                  animate={{ width: `${stats.financeStats.income > 0 || stats.financeStats.expenses > 0 ? (stats.financeStats.income / (stats.financeStats.income + stats.financeStats.expenses)) * 100 : 0}%` }}
-                  className="h-full bg-green-500"
+                  animate={{ width: `${stats.financeStats.expenses > 0 ? (stats.financeStats.needs / stats.financeStats.expenses) * 100 : 0}%` }}
+                  className="h-full bg-primary"
                 />
               </div>
             </div>
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-bold uppercase tracking-wider">
-                <span className="text-red-500">Total Expenses</span>
-                <span>${stats.financeStats.expenses.toLocaleString()}</span>
+                <span className="text-amber-500 font-black">Discretionary (Wants)</span>
+                <span>${stats.financeStats.wants.toLocaleString()}</span>
               </div>
-              <div className="h-3 w-full bg-secondary rounded-full overflow-hidden">
+              <div className="h-3 w-full bg-secondary rounded-full overflow-hidden flex">
                 <motion.div 
                   initial={{ width: 0 }}
-                  animate={{ width: `${stats.financeStats.income > 0 || stats.financeStats.expenses > 0 ? (stats.financeStats.expenses / (stats.financeStats.income + stats.financeStats.expenses)) * 100 : 0}%` }}
-                  className="h-full bg-red-500"
+                  animate={{ width: `${stats.financeStats.expenses > 0 ? (stats.financeStats.wants / stats.financeStats.expenses) * 100 : 0}%` }}
+                  className="h-full bg-amber-500"
                 />
               </div>
             </div>
-            <div className="pt-4 border-t border-border mt-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-bold">Net Savings</span>
-                <span className={`text-xl font-black ${stats.financeStats.net >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                  ${stats.financeStats.net.toLocaleString()}
-                </span>
+            
+            {stats.financeStats.spikes.length > 0 && (
+              <div className="mt-6 p-4 bg-red-500/5 rounded-xl border border-red-500/20">
+                <div className="flex items-center gap-2 mb-2 text-red-500 font-black text-[10px] uppercase tracking-widest">
+                  <TrendingUp className="w-4 h-4" /> Financial Alerts
+                </div>
+                <div className="space-y-1">
+                  {stats.financeStats.spikes.map(cat => (
+                    <p key={cat} className="text-xs font-medium text-red-600">
+                      ⚠️ Spike detected in <span className="font-black uppercase">{cat}</span> ({'>'}30% of spend).
+                    </p>
+                  ))}
+                  <p className="text-[10px] text-muted-foreground mt-2 italic">Recommendation: Review large transactions in these categories.</p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 

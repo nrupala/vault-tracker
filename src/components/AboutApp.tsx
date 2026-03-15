@@ -1,4 +1,4 @@
-import { Shield, Github, Heart, Globe, Lock } from 'lucide-react';
+import { Shield, Github, Heart, TrendingUp, Lock } from 'lucide-react';
 
 export function AboutApp() {
   return (
@@ -7,28 +7,28 @@ export function AboutApp() {
         <div className="inline-flex p-4 bg-primary/10 rounded-3xl mb-4">
           <Shield className="w-16 h-16 text-primary" />
         </div>
-        <h2 className="text-4xl font-black tracking-tighter">Vault Tracker v1.0</h2>
+        <h2 className="text-4xl font-black tracking-tighter">Vault Tracker v2.1</h2>
         <p className="text-muted-foreground max-w-md mx-auto leading-relaxed">
-          The world's most private productivity suite. Zero-trust, zero-knowledge, and 100% yours.
+          The world's most private productivity & finance suite. Zero-trust, zero-knowledge, and 100% yours.
         </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-card border border-border p-6 rounded-2xl shadow-sm space-y-4">
+        <div className="bg-card border border-border p-6 rounded-2xl shadow-sm space-y-4 text-left">
           <h3 className="font-bold text-lg flex items-center gap-2">
             <Lock className="w-5 h-5 text-primary" /> Security Model
           </h3>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Every piece of data—your notes, tasks, habits, and even your tags—is encrypted locally in your browser using **AES-256-GCM**. Your master password never leaves your device.
+            Every piece of data—your notes, tasks, habits, and financial records—is encrypted locally in your browser using **AES-256-GCM**. 
           </p>
         </div>
 
-        <div className="bg-card border border-border p-6 rounded-2xl shadow-sm space-y-4">
+        <div className="bg-card border border-border p-6 rounded-2xl shadow-sm space-y-4 text-left">
           <h3 className="font-bold text-lg flex items-center gap-2">
-            <Globe className="w-5 h-5 text-green-500" /> Decentralized
+            <TrendingUp className="w-5 h-5 text-orange-500" /> Financial Intel
           </h3>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            No cloud. No database leaks. No tracking. Your data is stored in your browser's IndexedDB. You own the vault; we just provide the tools.
+            New in v2.1: **Intelligent Spending Analysis**. Track Needs vs. Wants and receive proactive alerts on category spikes.
           </p>
         </div>
       </div>

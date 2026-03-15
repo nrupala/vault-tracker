@@ -10,6 +10,7 @@ interface ExpensePayload {
   entryType: 'debit' | 'credit';
   category: string;
   notes: string;
+  classification?: 'need' | 'want';
 }
 
 interface LedgerAppProps {
@@ -17,13 +18,19 @@ interface LedgerAppProps {
   encryptionKey: CryptoKey;
 }
 
+const CURATED_CATEGORIES = [
+  'Utilities', 'Eating Out', 'Grocery', 'Travel', 'Fuel', 
+  'Housing', 'Insurance', 'Health', 'Entertainment', 'Subscriptions', 'General'
+];
+
 export function LedgerApp({ vaultId, encryptionKey }: LedgerAppProps) {
   const { items, createItem } = useItems(vaultId, encryptionKey);
 
   const [newDescription, setNewDescription] = useState('');
   const [newAmount, setNewAmount] = useState('');
   const [entryType, setEntryType] = useState<'debit' | 'credit'>('debit');
-  const [newCategory, setNewCategory] = useState('');
+  const [newCategory, setNewCategory] = useState('General');
+  const [newClassification, setNewClassification] = useState<'need' | 'want'>('need');
   const [newNotes, setNewNotes] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -55,13 +62,15 @@ export function LedgerApp({ vaultId, encryptionKey }: LedgerAppProps) {
       description: newDescription,
       amount: parseFloat(newAmount),
       entryType,
-      category: newCategory || 'General',
+      category: newCategory,
+      classification: newClassification,
       notes: newNotes
-    }, [newCategory].filter(Boolean));
+    }, [newCategory, newClassification].filter(Boolean));
 
     setNewDescription('');
     setNewAmount('');
-    setNewCategory('');
+    setNewCategory('General');
+    setNewClassification('need');
     setNewNotes('');
   };
 
@@ -82,8 +91,9 @@ export function LedgerApp({ vaultId, encryptionKey }: LedgerAppProps) {
             amount: Math.abs(amount),
             entryType: amount >= 0 ? 'credit' : 'debit',
             category: row.Category || row.category || 'Imported',
+            classification: 'need', // Default for imports
             notes: row.Notes || row.notes || ''
-          }, [row.Category || row.category].filter(Boolean));
+          }, [row.Category || row.category, 'need'].filter(Boolean));
         }
       }
     });
@@ -187,20 +197,43 @@ export function LedgerApp({ vaultId, encryptionKey }: LedgerAppProps) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase text-muted-foreground ml-1 flex items-center gap-1">
                 <Tag className="w-3 h-3" /> Category
               </label>
-              <input 
-                type="text" 
-                placeholder="Food, Housing, Work..."
+              <select 
                 value={newCategory}
                 onChange={(e) => setNewCategory(e.target.value)}
                 className="w-full bg-secondary/50 border border-border/50 rounded-xl px-4 py-2.5 outline-none focus:ring-1 focus:ring-primary"
-              />
+              >
+                {CURATED_CATEGORIES.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
             </div>
-            <div className="md:col-span-1 space-y-2">
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase text-muted-foreground ml-1 flex items-center gap-1">
+                Classification
+              </label>
+              <div className="flex bg-secondary/50 rounded-xl p-1 border border-border/50">
+                <button 
+                  type="button"
+                  onClick={() => setNewClassification('need')}
+                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-black tracking-tighter transition-all ${newClassification === 'need' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground'}`}
+                >
+                  NEED
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setNewClassification('want')}
+                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-black tracking-tighter transition-all ${newClassification === 'want' ? 'bg-amber-500 text-white shadow-sm' : 'text-muted-foreground'}`}
+                >
+                  WANT
+                </button>
+              </div>
+            </div>
+            <div className="space-y-2">
               <label className="text-xs font-bold uppercase text-muted-foreground ml-1 flex items-center gap-1">
                 <FileText className="w-3 h-3" /> Notes
               </label>
@@ -256,6 +289,7 @@ export function LedgerApp({ vaultId, encryptionKey }: LedgerAppProps) {
               <tr className="bg-muted/50 text-muted-foreground text-[10px] uppercase tracking-[0.2em] font-black border-b border-border">
                 <th className="px-6 py-4">Date</th>
                 <th className="px-6 py-4">Category</th>
+                <th className="px-6 py-4">Type</th>
                 <th className="px-6 py-4">Description</th>
                 <th className="px-6 py-4 text-right">Debit</th>
                 <th className="px-6 py-4 text-right">Credit</th>
@@ -263,43 +297,60 @@ export function LedgerApp({ vaultId, encryptionKey }: LedgerAppProps) {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {expenseItems.map((item) => (
-                <tr key={item.id} className="hover:bg-muted/30 transition-colors group">
-                  <td className="px-6 py-4 text-xs font-medium text-muted-foreground">
-                    {format(new Date(item.createdAt), 'MMM dd, yyyy')}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="px-2 py-1 bg-secondary rounded-lg text-[10px] font-black uppercase tracking-wider border border-border/50">
-                      {item.payload.category}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-bold">{item.payload.description}</span>
-                      {item.payload.notes && <span className="text-[10px] text-muted-foreground">{item.payload.notes}</span>}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    {item.payload.entryType === 'debit' && (
-                      <span className="text-sm font-black text-red-500">
-                        -${item.payload.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              {expenseItems.map((item) => {
+                const isHighSpend = item.payload.entryType === 'debit' && item.payload.amount > 500;
+                return (
+                  <tr key={item.id} className={`hover:bg-muted/30 transition-colors group ${isHighSpend ? 'bg-red-500/5' : ''}`}>
+                    <td className="px-6 py-4 text-xs font-medium text-muted-foreground">
+                      {format(new Date(item.createdAt), 'MMM dd, yyyy')}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="px-2 py-1 bg-secondary rounded-lg text-[10px] font-black uppercase tracking-wider border border-border/50">
+                        {item.payload.category}
                       </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    {item.payload.entryType === 'credit' && (
-                      <span className="text-sm font-black text-green-500">
-                        +${item.payload.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-6 py-4">
+                      {item.payload.classification && (
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tighter ${item.payload.classification === 'need' ? 'bg-primary/20 text-primary' : 'bg-amber-500/20 text-amber-500'}`}>
+                          {item.payload.classification}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold">{item.payload.description}</span>
+                          {isHighSpend && (
+                            <span className="text-[8px] bg-red-500 text-white px-1.5 py-0.5 rounded-full font-black animate-pulse">
+                              HIGH SPEND
+                            </span>
+                          )}
+                        </div>
+                        {item.payload.notes && <span className="text-[10px] text-muted-foreground">{item.payload.notes}</span>}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      {item.payload.entryType === 'debit' && (
+                        <span className="text-sm font-black text-red-500">
+                          -${item.payload.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      {item.payload.entryType === 'credit' && (
+                        <span className="text-sm font-black text-green-500">
+                          +${item.payload.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right bg-primary/5">
+                      <span className={`text-sm font-black ${item.balance >= 0 ? 'text-primary' : 'text-red-500'}`}>
+                        ${item.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-right bg-primary/5">
-                    <span className={`text-sm font-black ${item.balance >= 0 ? 'text-primary' : 'text-red-500'}`}>
-                      ${item.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                );
+              })}
               {expenseItems.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-20 text-center text-muted-foreground">
