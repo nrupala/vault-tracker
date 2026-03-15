@@ -1,0 +1,190 @@
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Shield, 
+  CheckSquare, 
+  FileText, 
+  Activity, 
+  Menu, 
+  X, 
+  Download, 
+  Lock,
+  BarChart3,
+  Calendar,
+  Info
+} from 'lucide-react';
+import { useTheme, Theme } from './ThemeProvider';
+import { useVault } from '../hooks/useVault';
+
+export type ActiveTab = 'notes' | 'tasks' | 'habits' | 'analytics' | 'calendar' | 'about';
+
+interface AppShellProps {
+  children: React.ReactNode;
+  activeTab: ActiveTab;
+  onTabChange: (tab: ActiveTab) => void;
+}
+
+export function AppShell({ children, activeTab, onTabChange }: AppShellProps) {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const { theme, setTheme } = useTheme();
+  const { activeVault, lockVault } = useVault();
+
+  const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
+
+  const navItems = [
+    { id: 'notes' as ActiveTab, icon: FileText, label: 'Notes', color: 'text-blue-500' },
+    { id: 'tasks' as ActiveTab, icon: CheckSquare, label: 'Tasks', color: 'text-green-500' },
+    { id: 'habits' as ActiveTab, icon: Activity, label: 'Habits', color: 'text-purple-500' },
+    { id: 'calendar' as ActiveTab, icon: Calendar, label: 'Calendar', color: 'text-rose-500' },
+    { id: 'analytics' as ActiveTab, icon: BarChart3, label: 'Analytics', color: 'text-orange-500' },
+    { id: 'about' as ActiveTab, icon: Info, label: 'About', color: 'text-primary' },
+  ];
+
+  return (
+    <div className="flex h-screen bg-background overflow-hidden relative text-foreground">
+      {/* Mobile Sidebar Overlay */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={toggleSidebar}
+            className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm"
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Sidebar */}
+      <motion.aside
+        className={`fixed md:relative z-50 w-64 h-full bg-card border-r border-border flex flex-col transition-transform duration-300 ease-in-out transform ${
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        }`}
+      >
+        <div className="p-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-xl">
+              <Shield className="w-6 h-6 text-primary" />
+            </div>
+            <span className="font-bold text-lg tracking-tight">Vault</span>
+          </div>
+          <button onClick={toggleSidebar} className="md:hidden p-1 rounded-md hover:bg-secondary">
+            <X className="w-5 h-5 text-muted-foreground" />
+          </button>
+        </div>
+
+        {activeVault && (
+          <div className="px-6 py-2">
+            <div className="bg-secondary/50 rounded-lg p-3 border border-border/50">
+              <p className="text-xs text-muted-foreground uppercase font-semibold tracking-wider mb-1">Active Vault</p>
+              <p className="font-medium text-sm truncate">{activeVault.name}</p>
+            </div>
+          </div>
+        )}
+
+        <nav className="flex-1 px-4 py-4 space-y-1">
+          {navItems.map((item) => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                   onTabChange(item.id);
+                   setIsSidebarOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${isActive ? 'bg-secondary font-semibold' : 'hover:bg-secondary/50 font-medium text-muted-foreground hover:text-foreground'}`}
+              >
+                <item.icon className={`w-5 h-5 ${item.color} transition-opacity ${isActive ? 'opacity-100' : 'opacity-70 group-hover:opacity-100'}`} />
+                <span className="text-sm">{item.label}</span>
+              </button>
+            )
+          })}
+        </nav>
+
+        <div className="p-4 mt-auto border-t border-border space-y-4">
+          <div className="space-y-1">
+            <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Settings</p>
+            <div className="space-y-1">
+              <label className="text-[10px] uppercase font-bold text-muted-foreground px-2">Data & Export</label>
+              <div className="flex flex-col gap-1 px-2 mt-1">
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent('vault-export', { detail: 'json' }))}
+                  className="text-left text-xs py-1.5 hover:text-primary transition-colors flex items-center gap-2"
+                >
+                  <Download className="w-3.5 h-3.5" /> Export JSON
+                </button>
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent('vault-export', { detail: 'csv' }))}
+                  className="text-left text-xs py-1.5 hover:text-primary transition-colors flex items-center gap-2"
+                >
+                  <Download className="w-3.5 h-3.5" /> Export CSV
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase font-bold text-muted-foreground px-2">Theme</label>
+              <select
+                value={theme}
+                onChange={(e) => setTheme(e.target.value as Theme)}
+                className="w-full bg-secondary border border-border px-3 py-2 rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
+              >
+                <option value="system">System Default</option>
+                <option value="light">Light Slate</option>
+                <option value="sepia">Vintage Sepia</option>
+                <option value="blue">Deep Blue</option>
+                <option value="black">Amoled Black</option>
+              </select>
+            </div>
+          </div>
+
+          <button
+            onClick={lockVault}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+          >
+            <Lock className="w-4 h-4" />
+            Lock Vault
+          </button>
+        </div>
+      </motion.aside>
+
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-background">
+        <header className="h-16 flex items-center px-4 md:px-8 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-30 pt-[env(safe-area-inset-top)] h-[calc(4rem+env(safe-area-inset-top))]">
+          <button
+            onClick={toggleSidebar}
+            className="md:hidden p-2 rounded-md hover:bg-secondary mr-4"
+          >
+            <Menu className="w-5 h-5 text-foreground" />
+          </button>
+          <h1 className="text-xl font-semibold tracking-tight capitalize">{activeTab}</h1>
+        </header>
+
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-8">
+          <div className="max-w-5xl mx-auto w-full">
+            {children}
+          </div>
+        </div>
+
+        {/* Mobile Bottom Navigation */}
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-card/80 backdrop-blur-xl border-t border-border z-50 pb-[env(safe-area-inset-bottom)]">
+          <nav className="flex items-center justify-around h-16">
+            {navItems.slice(0, 4).map((item) => {
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => onTabChange(item.id)}
+                  className={`flex flex-col items-center gap-1 w-full py-1 transition-all ${isActive ? 'text-primary scale-110' : 'text-muted-foreground'}`}
+                >
+                  <item.icon className={`w-5 h-5 ${item.color} ${isActive ? 'opacity-100' : 'opacity-60'}`} />
+                  <span className="text-[10px] font-bold uppercase tracking-tighter">{item.label}</span>
+                </button>
+              )
+            })}
+          </nav>
+        </div>
+      </main>
+    </div>
+  );
+}

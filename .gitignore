@@ -1,0 +1,24 @@
+# node_modules
+node_modules/
+.env
+.env.local
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Capacitor
+android/
+ios/
+www/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
