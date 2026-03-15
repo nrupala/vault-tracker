@@ -4,6 +4,8 @@
 
 Vault Tracker is a premium, decentralized productivity suite designed for users who refuse to compromise on privacy. Built with a "Security-First" philosophy, it transforms your browser into a high-performance encryption engine where your notes, tasks, and habits are sealed with military-grade AES-256-GCM.
 
+Go to GitHub for documents, deployment, and source code: https://github.com/nrupala/vault-tracker
+
 ![Vault Tracker Icon](public/icon-512.png)
 
 ## ✨ Features
