@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { db, type EncryptedItem } from '../lib/db';
-import { encryptData, decryptData } from '../lib/crypto';
+import { db, type EncryptedItem } from './db';
+import { encryptData, decryptData } from './crypto';
 import { v4 as uuidv4 } from 'uuid';
 
 // This is the plaintext shape of the data used by the UI

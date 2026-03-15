@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useItems, DecryptedItem } from '../hooks/useItems';
+import { useItems, DecryptedItem } from '@vault/core';
 import { ContainerItem } from './ContainerItem';
 import { Activity, Plus, Target, Flame } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';

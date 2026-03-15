@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useItems, DecryptedItem } from '../hooks/useItems';
+import { useItems, DecryptedItem } from '@vault/core';
 import { ContainerItem } from './ContainerItem';
 import { CheckSquare, Plus, Circle, CheckCircle2, Hash, X as CloseIcon, Calendar, Bell, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';

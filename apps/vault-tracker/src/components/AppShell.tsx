@@ -15,7 +15,7 @@ import {
   Wallet
 } from 'lucide-react';
 import { useTheme, Theme } from './ThemeProvider';
-import { useVault } from '../hooks/useVault';
+import { useVault } from '@vault/core';
 
 export type ActiveTab = 'notes' | 'tasks' | 'habits' | 'analytics' | 'calendar' | 'ledger' | 'about';
 

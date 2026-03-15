@@ -19,6 +19,7 @@
     "electron:dist:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {
+    "@vault/core": "workspace:*",
     "@capacitor/android": "^8.2.0",
     "@capacitor/cli": "^7.6.0",
     "@capacitor/core": "^8.2.0",

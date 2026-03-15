@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { deriveKey, encryptData, decryptData } from '../lib/crypto';
+import { deriveKey, encryptData, decryptData } from '@vault/core';
 
 describe('Crypto module (Zero-Trust Logic)', () => {
   const password = 'extremely-secure-password';

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { encryptData, decryptData } from '../lib/crypto';
+import { encryptData, decryptData } from '@vault/core';
 
 // Stress Test: Simulating high-volume local encryption/decryption
 describe('Vault Stress Test', () => {

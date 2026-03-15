@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useItems } from '../hooks/useItems';
+import { useItems } from '@vault/core';
 import { ContainerItem } from './ContainerItem';
 import { PenLine, Plus, X as CloseIcon, Hash, Mic, Bold, Italic, List, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';

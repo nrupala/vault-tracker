@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Plus, Download, Upload, TrendingDown, TrendingUp, Wallet, Tag, FileText, Search } from 'lucide-react';
-import { useItems } from '../hooks/useItems';
+import { useItems } from '@vault/core';
 import { format } from 'date-fns';
 import Papa from 'papaparse';
 

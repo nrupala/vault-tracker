@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useItems } from '../hooks/useItems';
+import { useItems } from '@vault/core';
 import { BarChart3, TrendingUp, CheckCircle2, Flame, Award, Zap, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
 

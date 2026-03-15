@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useItems } from '../hooks/useItems';
+import { useItems } from '@vault/core';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, CheckCircle2, Target } from 'lucide-react';
 
 export function CalendarApp({ vaultId, encryptionKey }: { vaultId: string, encryptionKey: CryptoKey }) {
