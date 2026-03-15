@@ -21,7 +21,28 @@
   <div class="fixed bottom-4 right-4 z-[9999] flex flex-col items-end gap-3 pointer-events-none sm:pointer-events-auto max-w-[300px] text-right">
     <div class="bg-background/80 backdrop-blur-sm border border-border p-3 rounded-2xl shadow-xl space-y-2 mb-2">
       <p class="text-[10px] text-muted-foreground leading-tight">
-        VaultTracker is a zero-trust, offline, vault-based habit tracker, notes engine, and tasklist.
+        VaultTracker is a zero-trust, zero-knowledge, offline, vault-based habit tracker, expense tracker, notes engine, and tasklist.
+        Revisd version contains the world's most private productivity & finance (expense traking) suite. Zero-trust, zero-knowledge, and 100% yours.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-card border border-border p-6 rounded-2xl shadow-sm space-y-4 text-left">
+          <h3 className="font-bold text-lg flex items-center gap-2">
+            <Lock className="w-5 h-5 text-primary" /> Security Model
+          </h3>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Every piece of data—your notes, tasks, habits, and financial records—is encrypted locally in your browser using **AES-256-GCM**. 
+          </p>
+        </div>
+
+        <div className="bg-card border border-border p-6 rounded-2xl shadow-sm space-y-4 text-left">
+          <h3 className="font-bold text-lg flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-orange-500" /> Financial Intel
+          </h3>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            New in v2.1: **Intelligent Spending Analysis**. Track Needs vs. Wants and receive proactive alerts on category spikes.
+          </p>
       </p>
       <a href="https://github.com/nrupala/vault-tracker" target="_blank" class="text-[10px] font-bold text-primary hover:underline">
         View on GitHub
