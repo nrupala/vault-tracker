@@ -1,0 +1,16 @@
+{
+  "name": "vault-ecosystem",
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm -r --filter vault-tracker dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint"
+  },
+  "devDependencies": {
+    "pnpm": "latest"
+  }
+}
