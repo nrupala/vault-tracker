@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useItems, type DecryptedItem } from '@vault/core';
-import { ContainerItem } from './ContainerItem';
-import { Activity, Plus, Target, Flame } from 'lucide-react';
+import { ContainerItem, type Attachment } from './ContainerItem';
+import { Activity, Plus, Target, Flame, Paperclip, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface HabitPayload {
@@ -24,6 +24,8 @@ export function HabitsApp({ vaultId, encryptionKey }: { vaultId: string, encrypt
   const [newPriority, setNewPriority] = useState<DecryptedItem['priority']>('medium');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
+  const [newAttachments, setNewAttachments] = useState<Attachment[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const habits = items.filter((i: DecryptedItem) => i.type === 'habit');
 
@@ -31,9 +33,31 @@ export function HabitsApp({ vaultId, encryptionKey }: { vaultId: string, encrypt
     e.preventDefault();
     if (!newTitle.trim()) return;
     
-    await createItem('habit', { title: newTitle, streak: 0, lastCheckedIn: 0, checkedInDays: [] }, [], newPriority);
+    await createItem('habit', { title: newTitle, streak: 0, lastCheckedIn: 0, checkedInDays: [], attachments: newAttachments }, [], newPriority);
     setNewTitle('');
     setNewPriority('medium');
+    setNewAttachments([]);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = (event.target as FileReader)?.result;
+        if (result) {
+          setNewAttachments(prev => [...prev, {
+            id: crypto.randomUUID(),
+            name: file.name,
+            type: file.type,
+            data: result as string,
+            size: file.size
+          }]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleUpdateTitle = async (id: string, newTitle: string) => {
@@ -114,25 +138,65 @@ export function HabitsApp({ vaultId, encryptionKey }: { vaultId: string, encrypt
           </button>
         </div>
         
-        <div className="flex items-center gap-4">
-          <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Priority:</span>
-          <div className="flex gap-2">
-            {(['low', 'medium', 'high'] as const).map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setNewPriority(p)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold capitalize transition-all border ${
-                  newPriority === p 
-                    ? 'bg-primary/10 border-primary text-primary shadow-sm' 
-                    : 'bg-secondary/50 border-transparent text-muted-foreground hover:bg-secondary'
-                }`}
-              >
-                {p}
-              </button>
-            ))}
+        <div className="flex items-center justify-between gap-4 mt-2">
+          <div className="flex items-center gap-4">
+            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Priority:</span>
+            <div className="flex gap-2">
+              {(['low', 'medium', 'high'] as const).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setNewPriority(p)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold capitalize transition-all border ${
+                    newPriority === p 
+                      ? 'bg-primary/10 border-primary text-primary shadow-sm' 
+                      : 'bg-secondary/50 border-transparent text-muted-foreground hover:bg-secondary'
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center">
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleFileSelect} 
+              className="hidden" 
+              multiple 
+              accept="image/*,audio/*,video/*" 
+            />
+            <button 
+              type="button" 
+              onClick={() => fileInputRef.current?.click()} 
+              className="p-2 hover:bg-secondary rounded-xl transition-colors text-muted-foreground hover:text-foreground" 
+              title="Attach File"
+            >
+              <Paperclip className="w-5 h-5" />
+            </button>
           </div>
         </div>
+
+        {newAttachments.length > 0 && (
+          <div className="flex flex-col gap-1.5 mt-4 pt-4 border-t border-border/50">
+            {newAttachments.map(att => (
+              <div key={att.id} className="flex justify-between items-center bg-secondary/50 p-2 rounded-xl border border-border/30">
+                <div className="flex items-center gap-2 truncate">
+                  <Paperclip className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  <span className="text-xs font-medium truncate">{att.name}</span>
+                </div>
+                <button 
+                  type="button" 
+                  onClick={() => setNewAttachments(prev => prev.filter(a => a.id !== att.id))} 
+                  className="text-muted-foreground hover:text-red-500 transition-colors p-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </form>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">

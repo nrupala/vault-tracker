@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useItems, type DecryptedItem } from '@vault/core';
-import { ContainerItem } from './ContainerItem';
-import { PenLine, Plus, X as CloseIcon, Hash, Mic, Bold, Italic, List, Eye, EyeOff } from 'lucide-react';
+import { ContainerItem, type Attachment } from './ContainerItem';
+import { PenLine, Plus, X as CloseIcon, Hash, Mic, Bold, Italic, List, Eye, EyeOff, Paperclip, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TagSuggestions } from './TagSuggestions';
 import ReactMarkdown from 'react-markdown';
@@ -22,6 +22,8 @@ export function NotesApp({ vaultId, encryptionKey }: { vaultId: string, encrypti
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isPreview, setIsPreview] = useState(false);
+  const [newAttachments, setNewAttachments] = useState<Attachment[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Detect if Web Speech API is available (not available on Android Capacitor or some browsers)
   const speechAvailable = typeof window !== 'undefined' && 
@@ -105,15 +107,37 @@ export function NotesApp({ vaultId, encryptionKey }: { vaultId: string, encrypti
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle.trim() && !newContent.trim()) return;
+    if (!newTitle.trim() && !newContent.trim() && newAttachments.length === 0) return;
     
-    await createItem('note', { title: newTitle, content: newContent }, newTags, 'low');
+    await createItem('note', { title: newTitle, content: newContent, attachments: newAttachments }, newTags, 'low');
     setNewTitle('');
     setNewContent('');
     setNewTags([]);
+    setNewAttachments([]);
     setTagInput('');
     setIsCreating(false);
     setIsPreview(false);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = (event.target as FileReader)?.result;
+        if (result) {
+          setNewAttachments(prev => [...prev, {
+            id: crypto.randomUUID(),
+            name: file.name,
+            type: file.type,
+            data: result as string,
+            size: file.size
+          }]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const insertFormat = (prefix: string, suffix: string = '') => {
@@ -233,10 +257,30 @@ export function NotesApp({ vaultId, encryptionKey }: { vaultId: string, encrypti
               </button>
             </div>
 
-            <div className="flex items-center gap-1 border-b border-border/50 pb-2 mb-2">
-              <button type="button" onClick={() => insertFormat('**', '**')} className="p-1.5 hover:bg-secondary rounded transition-colors" title="Bold"><Bold className="w-4 h-4" /></button>
-              <button type="button" onClick={() => insertFormat('_', '_')} className="p-1.5 hover:bg-secondary rounded transition-colors" title="Italic"><Italic className="w-4 h-4" /></button>
-              <button type="button" onClick={() => insertFormat('- ')} className="p-1.5 hover:bg-secondary rounded transition-colors" title="List"><List className="w-4 h-4" /></button>
+            <div className="flex items-center justify-between border-b border-border/50 pb-2 mb-2">
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={() => insertFormat('**', '**')} className="p-1.5 hover:bg-secondary rounded transition-colors" title="Bold"><Bold className="w-4 h-4" /></button>
+                <button type="button" onClick={() => insertFormat('_', '_')} className="p-1.5 hover:bg-secondary rounded transition-colors" title="Italic"><Italic className="w-4 h-4" /></button>
+                <button type="button" onClick={() => insertFormat('- ')} className="p-1.5 hover:bg-secondary rounded transition-colors" title="List"><List className="w-4 h-4" /></button>
+              </div>
+              <div className="flex items-center gap-1">
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleFileSelect} 
+                  className="hidden" 
+                  multiple 
+                  accept="image/*,audio/*,video/*" 
+                />
+                <button 
+                  type="button" 
+                  onClick={() => fileInputRef.current?.click()} 
+                  className="p-1.5 hover:bg-secondary rounded transition-colors text-muted-foreground hover:text-foreground" 
+                  title="Attach File"
+                >
+                  <Paperclip className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <div className="relative min-h-[120px]">
@@ -322,6 +366,26 @@ export function NotesApp({ vaultId, encryptionKey }: { vaultId: string, encrypti
                  )}
                </div>
             </div>
+
+            {newAttachments.length > 0 && (
+              <div className="flex flex-col gap-1.5 mt-2">
+                {newAttachments.map(att => (
+                  <div key={att.id} className="flex justify-between items-center bg-secondary/30 p-2 rounded-lg border border-border/30">
+                    <div className="flex items-center gap-2 truncate">
+                      <Paperclip className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                      <span className="text-xs font-medium truncate">{att.name}</span>
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={() => setNewAttachments(prev => prev.filter(a => a.id !== att.id))} 
+                      className="text-muted-foreground hover:text-red-500 transition-colors p-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="flex justify-end gap-2 mt-2">
               <button 

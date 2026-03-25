@@ -3,6 +3,14 @@ import { Share2, Clock, MoreVertical, Trash2, Edit2, Copy, Check } from 'lucide-
 import { motion, AnimatePresence } from 'framer-motion';
 import { DecryptedItem } from '@vault/core';
 
+export interface Attachment {
+  id: string;
+  name: string;
+  type: string;
+  data: string;
+  size: number;
+}
+
 interface ContainerItemProps {
   item: DecryptedItem;
   children: React.ReactNode;
@@ -16,6 +24,7 @@ export function ContainerItem({ item, children, onUpdate, onDelete }: ContainerI
   const [editTitle, setEditTitle] = useState('');
   const [editContent, setEditContent] = useState('');
   const [editPriority, setEditPriority] = useState<DecryptedItem['priority']>(item.priority);
+  const [editAttachments, setEditAttachments] = useState<Attachment[]>([]);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -23,6 +32,7 @@ export function ContainerItem({ item, children, onUpdate, onDelete }: ContainerI
       setEditTitle((item.payload as any).title || '');
       setEditContent((item.payload as any).content || (item.payload as any).value || '');
       setEditPriority(item.priority);
+      setEditAttachments((item.payload as any).attachments || []);
     }
   }, [isEditing, item]);
 
@@ -31,6 +41,7 @@ export function ContainerItem({ item, children, onUpdate, onDelete }: ContainerI
     if ('title' in updatedPayload) updatedPayload.title = editTitle;
     if ('content' in updatedPayload) updatedPayload.content = editContent;
     if ('value' in updatedPayload) updatedPayload.value = editContent;
+    updatedPayload.attachments = editAttachments;
     
     await onUpdate({ ...item, payload: updatedPayload, priority: editPriority });
     setIsEditing(false);
@@ -184,6 +195,26 @@ export function ContainerItem({ item, children, onUpdate, onDelete }: ContainerI
                 })}
               </div>
             </div>
+            {/* Attachments Editing */}
+            {editAttachments.length > 0 && (
+              <div className="space-y-1.5 pt-2 border-t border-border/50">
+                <label className="text-[10px] uppercase font-bold text-muted-foreground">Attachments</label>
+                <div className="flex flex-col gap-1.5">
+                  {editAttachments.map(att => (
+                    <div key={att.id} className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-2.5 py-1.5">
+                      <span className="text-xs truncate max-w-[200px] font-medium text-foreground">{att.name}</span>
+                      <button 
+                        type="button" 
+                        onClick={() => setEditAttachments(prev => prev.filter(a => a.id !== att.id))}
+                        className="text-muted-foreground hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex justify-end gap-2">
               <button 
                 onClick={() => setIsEditing(false)}
@@ -205,8 +236,32 @@ export function ContainerItem({ item, children, onUpdate, onDelete }: ContainerI
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            className="flex flex-col flex-1"
           >
             {children}
+            {/* Attachments Display */}
+            {(item.payload as any).attachments?.length > 0 && (
+              <div className="mt-3 flex flex-col gap-2 pt-3 border-t border-border/30">
+                {(item.payload as any).attachments.map((att: Attachment) => {
+                  if (att.type.startsWith('image/')) {
+                    return <img key={att.id} src={att.data} alt={att.name} className="rounded-lg border border-border/50 max-h-60 object-contain bg-black/5" />;
+                  }
+                  if (att.type.startsWith('audio/')) {
+                    return <audio key={att.id} src={att.data} controls className="w-full h-10 rounded-full" />;
+                  }
+                  if (att.type.startsWith('video/')) {
+                    return <video key={att.id} src={att.data} controls className="w-full rounded-lg border border-border/50 max-h-60" />;
+                  }
+                  return (
+                    <a key={att.id} href={att.data} download={att.name} className="flex items-center gap-2 p-2 rounded-lg bg-secondary border border-border/50 hover:bg-secondary/80 transition-colors">
+                      <Share2 className="w-4 h-4 text-primary" />
+                      <span className="text-xs font-bold truncate flex-1">{att.name}</span>
+                      <span className="text-[10px] text-muted-foreground uppercase">{att.type.split('/')[1] || 'FILE'}</span>
+                    </a>
+                  );
+                })}
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
