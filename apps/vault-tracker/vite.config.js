@@ -5,8 +5,8 @@ import path from 'path';
 import { VitePWA } from 'vite-plugin-pwa';
 // https://vitejs.dev/config/
 export default defineConfig({
-    // base must be '/' for PWA manifest and service worker scope to resolve correctly on iOS Safari
-    base: '/',
+    // Use relative base so it works on GitHub Pages subpaths like /vault-tracker/
+    base: '',
     plugins: [
         react(),
         tailwindcss(),
