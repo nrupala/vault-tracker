@@ -6,6 +6,8 @@ Vault Tracker is a premium, decentralized productivity suite designed for users 
 
 Go to GitHub for documents, deployment, and source code: https://github.com/nrupala/vault-tracker
 
+To experience app on web-page and to install a localized PWA on iOS, Android or other supporting platforms visit: [nrupala.github.io/vault-tracker](https://nrupala.github.io/vault-tracker/)
+
 ![Vault Tracker Icon](public/icon-512.png)
 
 ## ✨ Features
