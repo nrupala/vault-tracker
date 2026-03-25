@@ -3,7 +3,7 @@ import { useItems, type DecryptedItem } from '@vault/core';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, CheckCircle2, Target, Plus, X, FileText, CheckSquare, Activity } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-type ViewMode = 'month' | 'week' | 'day';
+type ViewMode = 'month' | 'week' | 'work-week' | 'day';
 
 interface QuickCreateState {
   isOpen: boolean;
@@ -96,6 +96,21 @@ export function CalendarApp({ vaultId, encryptionKey }: { vaultId: string, encry
     return days;
   }, [currentDate, items]);
 
+  // ===== WORK WEEK VIEW DATA =====
+  const workWeekData = useMemo(() => {
+    const startOfWeek = new Date(currentDate);
+    // Go to previous Monday (or keep today if Monday)
+    startOfWeek.setDate(currentDate.getDate() - currentDate.getDay() + 1); // Monday
+    const days = [];
+    for (let i = 0; i < 5; i++) {
+      const date = new Date(startOfWeek);
+      date.setDate(startOfWeek.getDate() + i);
+      const dayItems = getItemsForDate(date);
+      days.push({ day: date.getDate(), fullDate: date, items: dayItems, heatScore: getHeatScore(dayItems) });
+    }
+    return days;
+  }, [currentDate, items]);
+
   // ===== DAY VIEW DATA =====
   const dayData = useMemo(() => {
     const dayItems = getItemsForDate(currentDate);
@@ -143,6 +158,13 @@ export function CalendarApp({ vaultId, encryptionKey }: { vaultId: string, encry
       start.setDate(currentDate.getDate() - currentDate.getDay());
       const end = new Date(start);
       end.setDate(start.getDate() + 6);
+      return `${start.toLocaleDateString('default', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('default', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    }
+    if (viewMode === 'work-week') {
+      const start = new Date(currentDate);
+      start.setDate(currentDate.getDate() - currentDate.getDay() + 1);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 4);
       return `${start.toLocaleDateString('default', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('default', { month: 'short', day: 'numeric', year: 'numeric' })}`;
     }
     return currentDate.toLocaleDateString('default', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
@@ -224,13 +246,13 @@ export function CalendarApp({ vaultId, encryptionKey }: { vaultId: string, encry
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {/* View Mode Toggle */}
           <div className="flex bg-secondary border border-border rounded-xl overflow-hidden text-xs font-bold">
-            {(['month', 'week', 'day'] as ViewMode[]).map((mode) => (
+            {(['month', 'week', 'work-week', 'day'] as ViewMode[]).map((mode) => (
               <button
                 key={mode}
                 onClick={() => setViewMode(mode)}
                 className={`px-3 py-2 capitalize transition-colors ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               >
-                {mode}
+                {mode.replace('-', ' ')}
               </button>
             ))}
           </div>
@@ -322,54 +344,133 @@ export function CalendarApp({ vaultId, encryptionKey }: { vaultId: string, encry
         </div>
       )}
 
+      {/* ===== WORK WEEK VIEW ===== */}
+      {viewMode === 'work-week' && (
+        <div>
+          <div className="hidden sm:grid grid-cols-5 gap-2">
+            {workWeekData.map((d, i) => (
+              <div key={i} className="text-center text-[10px] uppercase font-bold text-muted-foreground py-2 tracking-widest">
+                {d.fullDate.toLocaleDateString('default', { weekday: 'short' })}
+              </div>
+            ))}
+            {workWeekData.map((d) => renderDayCell(d, false))}
+          </div>
+          {/* Mobile: Stack days vertically */}
+          <div className="sm:hidden flex flex-col gap-3">
+            {workWeekData.map((d) => (
+              <div key={d.fullDate.toISOString()} className={`border border-border rounded-2xl p-3 transition-all ${isToday(d.fullDate) ? 'border-primary/50 bg-primary/5' : 'bg-card'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-bold ${isToday(d.fullDate) ? 'bg-primary text-primary-foreground w-7 h-7 rounded-full flex items-center justify-center' : ''}`}>
+                      {d.day}
+                    </span>
+                    <span className="text-xs text-muted-foreground font-medium">
+                      {d.fullDate.toLocaleDateString('default', { weekday: 'long', month: 'short' })}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => openQuickCreate(d.fullDate)}
+                    className="p-1.5 rounded-lg hover:bg-secondary transition-colors"
+                  >
+                    <Plus className="w-4 h-4 text-muted-foreground" />
+                  </button>
+                </div>
+                {d.items.length > 0 ? (
+                  <div className="space-y-1">
+                    {d.items.map((item: any) => (
+                      <div key={item.id} className={`text-xs px-2 py-1.5 rounded-lg flex items-center gap-2 font-medium ${
+                        item.type === 'task' ? 'bg-green-500/10 text-green-500' :
+                        item.type === 'habit' ? 'bg-purple-500/10 text-purple-500' :
+                        'bg-blue-500/10 text-blue-500'
+                      }`}>
+                        {item.type === 'task' ? <CheckCircle2 className="w-3 h-3 shrink-0" /> :
+                         item.type === 'habit' ? <Target className="w-3 h-3 shrink-0" /> : <FileText className="w-3 h-3 shrink-0" />}
+                        {item.calendarLabel}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground/50 italic">No activity</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ===== DAY VIEW ===== */}
       {viewMode === 'day' && (
-        <div className="space-y-4">
-          <div className={`border border-border rounded-2xl p-4 sm:p-6 ${isToday(dayData.fullDate) ? 'border-primary/50 bg-primary/5' : 'bg-card'}`}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <span className={`text-2xl font-bold ${isToday(dayData.fullDate) ? 'bg-primary text-primary-foreground w-10 h-10 rounded-full flex items-center justify-center' : ''}`}>
-                  {dayData.day}
-                </span>
-                <span className="text-sm text-muted-foreground font-medium">
-                  {dayData.fullDate.toLocaleDateString('default', { weekday: 'long', month: 'long', year: 'numeric' })}
-                </span>
-              </div>
-              <button
-                onClick={() => openQuickCreate(dayData.fullDate)}
-                className="flex items-center gap-2 px-3 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-bold hover:opacity-90 transition-opacity"
-              >
-                <Plus className="w-4 h-4" /> Add
-              </button>
+        <div className="bg-card w-full border border-border rounded-2xl overflow-hidden shadow-sm flex flex-col h-[70vh] sm:h-[80vh]">
+          {/* Header */}
+          <div className="p-4 sm:p-5 border-b border-border bg-muted/10 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-3">
+              <span className={`text-xl sm:text-2xl font-bold transition-colors ${isToday(dayData.fullDate) ? 'bg-primary text-primary-foreground w-10 h-10 rounded-full flex items-center justify-center' : ''}`}>
+                {dayData.day}
+              </span>
+              <span className="text-sm sm:text-base text-muted-foreground font-medium">
+                {dayData.fullDate.toLocaleDateString('default', { weekday: 'long', month: 'long', year: 'numeric' })}
+              </span>
             </div>
+            <button
+              onClick={() => openQuickCreate(dayData.fullDate)}
+              className="flex items-center gap-2 bg-primary text-primary-foreground px-3 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-sm hover:bg-primary/90 transition-all active:scale-95"
+            >
+              <Plus className="w-4 h-4" /> Add
+            </button>
+          </div>
 
-            {dayData.items.length > 0 ? (
-              <div className="space-y-2">
-                {dayData.items.map((item: any) => (
-                  <div key={item.id} className={`px-4 py-3 rounded-xl flex items-center gap-3 font-medium ${
-                    item.type === 'task' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
-                    item.type === 'habit' ? 'bg-purple-500/10 text-purple-500 border border-purple-500/20' :
-                    'bg-blue-500/10 text-blue-500 border border-blue-500/20'
-                  }`}>
-                    {item.type === 'task' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> :
-                     item.type === 'habit' ? <Target className="w-4 h-4 shrink-0" /> : <FileText className="w-4 h-4 shrink-0" />}
-                    <span className="text-sm">{item.calendarLabel}</span>
-                    <span className="ml-auto text-[10px] uppercase font-bold tracking-widest opacity-50">{item.type}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <CalendarIcon className="w-10 h-10 mx-auto text-muted-foreground/30 mb-3" />
-                <p className="text-sm text-muted-foreground">Nothing scheduled for this day</p>
-                <button
-                  onClick={() => openQuickCreate(dayData.fullDate)}
-                  className="mt-3 text-xs text-primary font-bold hover:underline"
+          {/* Hourly Timeline */}
+          <div className="flex-1 overflow-y-auto no-scrollbar pb-10">
+            <div className="relative flex flex-col w-full isolate">
+              {/* Current Time Indicator Line */}
+              {isToday(dayData.fullDate) && (
+                <div 
+                  className="absolute left-14 sm:left-20 right-0 z-30 pointer-events-none flex items-center transition-all duration-1000"
+                  style={{ top: `${(new Date().getHours() * 80) + (new Date().getMinutes() / 60 * 80)}px` }}
                 >
-                  + Add something
-                </button>
-              </div>
-            )}
+                  <div className="w-2.5 h-2.5 rounded-full bg-rose-500 absolute -left-1.5 z-40"></div>
+                  <div className="w-full border-t border-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)] z-40"></div>
+                </div>
+              )}
+
+              {/* Time Slots */}
+              {Array.from({ length: 24 }).map((_, hour) => {
+                const hourLabel = hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`;
+                
+                const currentItems = dayData.items.filter((item: any) => {
+                  let ts = item.createdAt;
+                  if (item.type === 'task' && item.payload.dueDate) ts = item.payload.dueDate;
+                  return new Date(ts).getHours() === hour;
+                });
+
+                return (
+                  <div key={hour} className="flex min-h-[80px] border-b border-border/40 group hover:bg-muted/5 transition-colors">
+                    {/* Time Label Column */}
+                    <div className="w-14 sm:w-20 pt-2 shrink-0 border-r border-border/40 text-right pr-2 sm:pr-4 relative">
+                      <span className="text-[10px] sm:text-xs font-bold text-muted-foreground/40 inline-block -translate-y-1/2 bg-card px-1">{hourLabel}</span>
+                    </div>
+
+                    {/* Content Column */}
+                    <div className="flex-1 relative p-1.5 sm:p-2.5 flex flex-col gap-1.5 break-inside-avoid">
+                      {currentItems.map((item: any) => (
+                        <div key={item.id} className={`px-3 py-2 sm:py-2.5 rounded-xl border shadow-sm text-xs font-bold flex justify-between items-center transition-all hover:scale-[1.01] cursor-pointer z-10 ${
+                          item.type === 'task' ? 'bg-green-500/10 border-green-500/20 text-green-700 dark:text-green-400' :
+                          item.type === 'habit' ? 'bg-purple-500/10 border-purple-500/20 text-purple-700 dark:text-purple-400' :
+                          'bg-blue-500/10 border-blue-500/20 text-blue-700 dark:text-blue-400'
+                        }`}>
+                          <div className="flex items-center gap-2 truncate">
+                            {item.type === 'task' ? <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> :
+                             item.type === 'habit' ? <Target className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> : <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />}
+                            <span className="truncate">{item.calendarLabel}</span>
+                          </div>
+                          <span className="text-[9px] sm:text-[10px] uppercase font-black opacity-50 tracking-widest bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded ml-2 shrink-0">{item.type}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

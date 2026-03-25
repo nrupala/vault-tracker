@@ -19,6 +19,7 @@ export function TasksApp({ vaultId, encryptionKey }: { vaultId: string, encrypti
   const [newTags, setNewTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
+  const [optimisticStatus, setOptimisticStatus] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const handleExport = (e: any) => exportData((e as CustomEvent).detail);
@@ -81,9 +82,23 @@ export function TasksApp({ vaultId, encryptionKey }: { vaultId: string, encrypti
 
   const toggleTask = async (task: DecryptedItem) => {
     const payload = task.payload as TaskPayload;
-    await updateItem(task.id, {
-      payload: { ...payload, isCompleted: !payload.isCompleted }
-    });
+    const newStatus = !payload.isCompleted;
+    
+    // Optimistic UI update
+    setOptimisticStatus(prev => ({ ...prev, [task.id]: newStatus }));
+    
+    try {
+      await updateItem(task.id, {
+        payload: { ...payload, isCompleted: newStatus }
+      });
+    } finally {
+      // Clear optimistic state once DB is synced
+      setOptimisticStatus(prev => {
+        const next = { ...prev };
+        delete next[task.id];
+        return next;
+      });
+    }
   };
 
   const getDueStatus = (dueDate?: number) => {
@@ -199,7 +214,7 @@ export function TasksApp({ vaultId, encryptionKey }: { vaultId: string, encrypti
         <AnimatePresence>
           {tasks.map((task: DecryptedItem) => {
             const payload = task.payload as TaskPayload;
-            const isCompleted = payload.isCompleted;
+            const isCompleted = optimisticStatus[task.id] !== undefined ? optimisticStatus[task.id] : payload.isCompleted;
             const dueStatus = getDueStatus(payload.dueDate);
 
             return (

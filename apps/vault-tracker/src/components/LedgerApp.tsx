@@ -294,7 +294,7 @@ export function LedgerApp({ vaultId, encryptionKey }: LedgerAppProps) {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse hidden md:table">
             <thead>
               <tr className="bg-muted/50 text-muted-foreground text-[10px] uppercase tracking-[0.2em] font-black border-b border-border">
                 <th className="px-6 py-4">Date</th>
@@ -373,6 +373,70 @@ export function LedgerApp({ vaultId, encryptionKey }: LedgerAppProps) {
               )}
             </tbody>
           </table>
+
+          {/* Mobile Card Layout */}
+          <div className="md:hidden flex flex-col divide-y divide-border/50">
+            {expenseItems.map((item: DecryptedItem & { payload: ExpensePayload, balance: number }) => {
+              const isHighSpend = item.payload.entryType === 'debit' && item.payload.amount > 500;
+              return (
+                <div key={item.id} className={`p-4 flex flex-col gap-3 transition-colors ${isHighSpend ? 'bg-red-500/5' : 'hover:bg-muted/30'}`}>
+                  {/* Top Row: Description & Amount */}
+                  <div className="flex justify-between items-start">
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-foreground">{item.payload.description}</span>
+                        {isHighSpend && (
+                          <span className="text-[9px] bg-red-500 text-white px-1.5 py-0.5 rounded-full font-black">
+                            HIGH SPEND
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-muted-foreground mt-0.5">
+                        {format(new Date(item.createdAt), 'MMM dd, yyyy • h:mm a')}
+                      </span>
+                    </div>
+                    <span className={`text-sm font-black ${item.payload.entryType === 'debit' ? 'text-red-500' : 'text-green-500'}`}>
+                      {item.payload.entryType === 'debit' ? '-' : '+'}${item.payload.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+
+                  {/* Middle Row: Badges */}
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-1 bg-secondary rounded-lg text-[10px] font-black uppercase tracking-wider border border-border/50">
+                      {item.payload.category}
+                    </span>
+                    {item.payload.classification && (
+                      <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter ${item.payload.classification === 'need' ? 'bg-primary/20 text-primary' : 'bg-amber-500/20 text-amber-500'}`}>
+                        {item.payload.classification}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Bottom Row: Notes & Balance */}
+                  <div className="flex justify-between items-end mt-1">
+                    <div className="flex-1 pr-4">
+                      {item.payload.notes && (
+                        <p className="text-[11px] text-muted-foreground italic line-clamp-2">"{item.payload.notes}"</p>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-0.5">Bal</p>
+                      <span className={`text-sm font-black ${item.balance >= 0 ? 'text-primary' : 'text-red-500'}`}>
+                        ${item.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            
+            {expenseItems.length === 0 && (
+              <div className="p-12 text-center flex flex-col items-center justify-center text-muted-foreground opacity-50">
+                <Wallet className="w-12 h-12 mb-3" />
+                <p className="font-bold text-sm">No transactions found.</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

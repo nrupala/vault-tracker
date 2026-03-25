@@ -170,10 +170,19 @@ export function AppShell({ children, activeTab, onTabChange }: AppShellProps) {
         </header>
 
         {/* Scrollable content with enough bottom clearance for mobile nav */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-8">
-          <div className="max-w-5xl mx-auto w-full">
-            {children}
-          </div>
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-8 relative overflow-x-hidden">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.2 }}
+              className="max-w-5xl mx-auto w-full h-full"
+            >
+              {children}
+            </motion.div>
+          </AnimatePresence>
         </div>
 
         {/*
