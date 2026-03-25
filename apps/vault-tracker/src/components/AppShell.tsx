@@ -43,7 +43,7 @@ export function AppShell({ children, activeTab, onTabChange }: AppShellProps) {
   ];
 
   return (
-    <div className="flex h-dvh bg-background overflow-hidden relative text-foreground">
+    <div className="flex h-dvh bg-background overflow-hidden relative text-foreground" style={{ fontFamily: "'Inter', sans-serif" }}>
       {/* Mobile Sidebar Overlay */}
       <AnimatePresence>
         {isSidebarOpen && (
@@ -58,12 +58,12 @@ export function AppShell({ children, activeTab, onTabChange }: AppShellProps) {
       </AnimatePresence>
 
       {/* Sidebar */}
-      <motion.aside
+      <aside
         className={`fixed md:relative z-50 w-64 h-full bg-card border-r border-border flex flex-col transition-transform duration-300 ease-in-out transform ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}
       >
-        <div className="p-6 flex items-center justify-between">
+        <div className="p-6 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-primary/10 rounded-xl">
               <Shield className="w-6 h-6 text-primary" />
@@ -76,7 +76,7 @@ export function AppShell({ children, activeTab, onTabChange }: AppShellProps) {
         </div>
 
         {activeVault && (
-          <div className="px-6 py-2">
+          <div className="px-6 py-2 shrink-0">
             <div className="bg-secondary/50 rounded-lg p-3 border border-border/50">
               <p className="text-xs text-muted-foreground uppercase font-semibold tracking-wider mb-1">Active Vault</p>
               <p className="font-medium text-sm truncate">{activeVault.name}</p>
@@ -84,7 +84,8 @@ export function AppShell({ children, activeTab, onTabChange }: AppShellProps) {
           </div>
         )}
 
-        <nav className="flex-1 px-4 py-4 space-y-1">
+        {/* Nav — scrollable so it doesn't push footer off screen */}
+        <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const isActive = activeTab === item.id;
             return (
@@ -103,11 +104,16 @@ export function AppShell({ children, activeTab, onTabChange }: AppShellProps) {
           })}
         </nav>
 
-        <div className="p-4 mt-auto border-t border-border space-y-4 pb-[env(safe-area-inset-bottom)]">
+        {/* 
+          Sidebar footer: uses max() so on Android/iPhone where the bottom nav is 4rem,
+          logout + theme are always visible above it.
+          On desktop (md:pb-4) this padding is removed.
+        */}
+        <div className="p-4 mt-auto border-t border-border space-y-4 shrink-0 pb-[max(calc(env(safe-area-inset-bottom)+1rem),5.5rem)] md:pb-4">
           <div className="space-y-1">
             <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Settings</p>
             <div className="space-y-1">
-              <label className="text-[10px] uppercase font-bold text-muted-foreground px-2">Data & Export</label>
+              <label className="text-[10px] uppercase font-bold text-muted-foreground px-2">Data &amp; Export</label>
               <div className="flex flex-col gap-1 px-2 mt-1">
                 <button
                   onClick={() => window.dispatchEvent(new CustomEvent('vault-export', { detail: 'json' }))}
@@ -148,11 +154,12 @@ export function AppShell({ children, activeTab, onTabChange }: AppShellProps) {
             Lock Vault
           </button>
         </div>
-      </motion.aside>
+      </aside>
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-background">
-        <header className="h-16 flex items-center px-4 md:px-8 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-30 pt-[env(safe-area-inset-top)] h-[calc(4rem+env(safe-area-inset-top))]">
+        {/* Header — single height calc, no duplicate h-16 */}
+        <header className="flex items-center px-4 md:px-8 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-30 h-[calc(4rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)]">
           <button
             onClick={toggleSidebar}
             className="md:hidden p-2 rounded-md hover:bg-secondary mr-4"
@@ -162,25 +169,32 @@ export function AppShell({ children, activeTab, onTabChange }: AppShellProps) {
           <h1 className="text-xl font-semibold tracking-tight capitalize">{activeTab}</h1>
         </header>
 
+        {/* Scrollable content with enough bottom clearance for mobile nav */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-8">
           <div className="max-w-5xl mx-auto w-full">
             {children}
           </div>
         </div>
 
-        {/* Mobile Bottom Navigation */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-card/80 backdrop-blur-xl border-t border-border z-50 pb-[env(safe-area-inset-bottom)]">
-          <nav className="flex items-center justify-around h-16">
-            {navItems.filter(i => ['notes', 'tasks', 'habits', 'ledger', 'about'].includes(i.id)).map((item) => {
+        {/*
+          Mobile Bottom Navigation — ALL 7 TABS.
+          Horizontally scrollable row so every tab is reachable on narrow phones.
+          min-w-[4rem] per tab prevents them from collapsing below a tappable size.
+        */}
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-card/90 backdrop-blur-xl border-t border-border z-50 pb-[env(safe-area-inset-bottom)]">
+          <nav className="flex items-center overflow-x-auto h-16 px-1" style={{ scrollbarWidth: 'none' }}>
+            {navItems.map((item) => {
               const isActive = activeTab === item.id;
               return (
                 <button
                   key={item.id}
                   onClick={() => onTabChange(item.id)}
-                  className={`flex flex-col items-center gap-1 w-full py-1 transition-all ${isActive ? 'text-primary' : 'text-muted-foreground'}`}
+                  className={`flex flex-col items-center justify-center gap-0.5 min-w-[4.25rem] flex-1 h-full py-1 px-1 transition-all ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
                 >
-                  <item.icon className={`w-5 h-5 ${item.color} ${isActive ? 'opacity-100' : 'opacity-60'}`} />
-                  <span className="text-[9px] font-bold uppercase tracking-tighter">{item.label}</span>
+                  <div className={`w-10 h-6 flex items-center justify-center rounded-full transition-all ${isActive ? 'bg-primary/20' : ''}`}>
+                    <item.icon className={`w-4.5 h-4.5 ${item.color} ${isActive ? 'opacity-100 scale-110' : 'opacity-50'} transition-all`} style={{ width: '1.125rem', height: '1.125rem' }} />
+                  </div>
+                  <span className={`text-[9px] font-bold uppercase tracking-tighter whitespace-nowrap leading-none ${isActive ? 'opacity-100' : 'opacity-60'}`}>{item.label}</span>
                 </button>
               )
             })}

@@ -19,11 +19,11 @@
     "electron:dist:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {
-    "@vault/core": "workspace:*",
     "@capacitor/android": "^8.2.0",
     "@capacitor/cli": "^7.6.0",
     "@capacitor/core": "^8.2.0",
     "@capacitor/ios": "^8.2.0",
+    "@vault/core": "workspace:*",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "dexie": "^4.3.0",
@@ -61,6 +61,7 @@
     "tailwindcss": "^4.2.1",
     "typescript": "^5.9.3",
     "vite": "^6.4.1",
+    "vite-plugin-pwa": "^1.2.0",
     "vitest": "^4.1.0",
     "wait-on": "^8.0.5"
   },

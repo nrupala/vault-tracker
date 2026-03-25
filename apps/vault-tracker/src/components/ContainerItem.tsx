@@ -15,12 +15,14 @@ export function ContainerItem({ item, children, onUpdate, onDelete }: ContainerI
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editContent, setEditContent] = useState('');
+  const [editPriority, setEditPriority] = useState<DecryptedItem['priority']>(item.priority);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (isEditing) {
       setEditTitle((item.payload as any).title || '');
       setEditContent((item.payload as any).content || (item.payload as any).value || '');
+      setEditPriority(item.priority);
     }
   }, [isEditing, item]);
 
@@ -30,7 +32,7 @@ export function ContainerItem({ item, children, onUpdate, onDelete }: ContainerI
     if ('content' in updatedPayload) updatedPayload.content = editContent;
     if ('value' in updatedPayload) updatedPayload.value = editContent;
     
-    await onUpdate({ ...item, payload: updatedPayload });
+    await onUpdate({ ...item, payload: updatedPayload, priority: editPriority });
     setIsEditing(false);
   };
 
@@ -156,6 +158,32 @@ export function ContainerItem({ item, children, onUpdate, onDelete }: ContainerI
               className="w-full bg-secondary/50 border border-border rounded-lg px-3 py-1.5 text-sm min-h-[80px] focus:outline-none resize-none"
               placeholder="Content"
             />
+            {/* Priority selector */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] uppercase font-bold text-muted-foreground">Priority</label>
+              <div className="flex gap-1.5">
+                {(['low', 'medium', 'high', 'critical'] as const).map((p) => {
+                  const colors: Record<string, string> = {
+                    low: 'border-blue-500 bg-blue-500/10 text-blue-500',
+                    medium: 'border-yellow-500 bg-yellow-500/10 text-yellow-500',
+                    high: 'border-orange-500 bg-orange-500/10 text-orange-500',
+                    critical: 'border-red-500 bg-red-500/10 text-red-500',
+                  };
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setEditPriority(p)}
+                      className={`flex-1 px-2 py-1 rounded-lg text-[10px] font-black capitalize border-2 transition-all ${
+                        editPriority === p ? colors[p] : 'border-transparent bg-secondary/50 text-muted-foreground hover:bg-secondary'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <div className="flex justify-end gap-2">
               <button 
                 onClick={() => setIsEditing(false)}

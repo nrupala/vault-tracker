@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useItems, type DecryptedItem } from '@vault/core';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, CheckCircle2, Target, Plus, X, FileText, CheckSquare, Activity } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -21,19 +21,29 @@ export function CalendarApp({ vaultId, encryptionKey }: { vaultId: string, encry
   });
 
   // Helper: get items for a specific date
-  const getItemsForDate = (date: Date): any[] => {
+  const getItemsForDate = useCallback((date: Date): any[] => {
     const dayItems: any[] = [];
     const d = date.getDate(), m = date.getMonth(), y = date.getFullYear();
 
     items.forEach((item: DecryptedItem) => {
       if (item.type === 'habit') {
+        // Habits are matched by their check-in history
         const history = (item.payload as any).checkedInDays || [];
         const matched = history.some((timestamp: number) => {
           const dt = new Date(timestamp);
           return dt.getDate() === d && dt.getMonth() === m && dt.getFullYear() === y;
         });
         if (matched) dayItems.push({ ...item, calendarLabel: item.payload.title });
+      } else if (item.type === 'task') {
+        // Tasks: prefer dueDate from payload, fall back to createdAt
+        const dueDate = (item.payload as any).dueDate;
+        const ts = dueDate ? dueDate : item.createdAt;
+        const dt = new Date(ts);
+        if (dt.getDate() === d && dt.getMonth() === m && dt.getFullYear() === y) {
+          dayItems.push({ ...item, calendarLabel: (item.payload as any).title });
+        }
       } else {
+        // Notes use createdAt
         const dt = new Date(item.createdAt);
         if (dt.getDate() === d && dt.getMonth() === m && dt.getFullYear() === y) {
           dayItems.push({ ...item, calendarLabel: (item.payload as any).title });
@@ -41,7 +51,7 @@ export function CalendarApp({ vaultId, encryptionKey }: { vaultId: string, encry
       }
     });
     return dayItems;
-  };
+  }, [items]);
 
   // Helper: compute heat score
   const getHeatScore = (dayItems: any[]): number => {

@@ -11,6 +11,7 @@ import { CalendarApp } from './components/CalendarApp';
 import { LedgerApp } from './components/LedgerApp';
 import { AboutApp } from './components/AboutApp';
 import { AppShell, ActiveTab } from './components/AppShell';
+import { ConfirmModal } from './components/ConfirmModal';
 
 function VaultManager({ onUnlock }: { onUnlock: () => void }) {
   const { vaults, loadVaults, createVault, unlockVault, deleteVault } = useVault();
@@ -20,6 +21,7 @@ function VaultManager({ onUnlock }: { onUnlock: () => void }) {
   const [selectedVaultId, setSelectedVaultId] = useState<string>('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     loadVaults();
@@ -50,14 +52,10 @@ function VaultManager({ onUnlock }: { onUnlock: () => void }) {
         onUnlock();
       } else if (mode === 'delete') {
         if (!selectedVaultId || !password) throw new Error('Password required to delete');
-        if (!confirm('CRITICAL WARNING: This will permanently delete ALL data in this vault. This cannot be undone. Are you absolutely sure?')) {
-           setLoading(false);
-           return;
-        }
-        await deleteVault(selectedVaultId, password);
-        setMode('unlock');
-        setPassword('');
-        alert('Vault deleted successfully.');
+        // Show the custom confirm modal instead of window.confirm()
+        setShowDeleteConfirm(true);
+        setLoading(false);
+        return;
       }
     } catch (err: any) {
       setError(err.message || 'Action failed');
@@ -66,8 +64,24 @@ function VaultManager({ onUnlock }: { onUnlock: () => void }) {
     }
   };
 
+  const handleConfirmDelete = async () => {
+    setShowDeleteConfirm(false);
+    setLoading(true);
+    try {
+      await deleteVault(selectedVaultId, password);
+      setMode('unlock');
+      setPassword('');
+      setError('');
+    } catch (err: any) {
+      setError(err.message || 'Delete failed. Wrong password?');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
+    <>
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -220,6 +234,18 @@ function VaultManager({ onUnlock }: { onUnlock: () => void }) {
         </div>
       </motion.div>
     </div>
+
+      {/* Vault Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        title="Delete Vault Permanently?"
+        message="This will permanently delete ALL encrypted data in this vault. This action cannot be undone and your data will be unrecoverable."
+        confirmLabel="Wipe Vault"
+        variant="destructive"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
+    </>
   );
 }
 

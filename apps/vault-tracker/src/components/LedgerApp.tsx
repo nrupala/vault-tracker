@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Plus, Download, Upload, TrendingDown, TrendingUp, Wallet, Tag, FileText, Search } from 'lucide-react';
 import { useItems, type DecryptedItem } from '@vault/core';
 import { format } from 'date-fns';
@@ -24,7 +24,14 @@ const CURATED_CATEGORIES = [
 ];
 
 export function LedgerApp({ vaultId, encryptionKey }: LedgerAppProps) {
-  const { items, createItem } = useItems(vaultId, encryptionKey);
+  const { items, createItem, exportData } = useItems(vaultId, encryptionKey);
+
+  // Wire up the sidebar Export buttons
+  useEffect(() => {
+    const handleExport = (e: any) => exportData((e as CustomEvent).detail);
+    window.addEventListener('vault-export', handleExport);
+    return () => window.removeEventListener('vault-export', handleExport);
+  }, [exportData]);
 
   const [newDescription, setNewDescription] = useState('');
   const [newAmount, setNewAmount] = useState('');
@@ -276,9 +283,12 @@ export function LedgerApp({ vaultId, encryptionKey }: LedgerAppProps) {
               IMPORT CSV
               <input type="file" accept=".csv" onChange={handleCsvImport} className="hidden" />
             </label>
-            <button className="bg-secondary hover:bg-secondary/80 text-foreground px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all">
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('vault-export', { detail: 'csv' }))}
+              className="bg-secondary hover:bg-secondary/80 text-foreground px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all"
+            >
               <Download className="w-4 h-4" />
-              EXPORT
+              EXPORT CSV
             </button>
           </div>
         </div>

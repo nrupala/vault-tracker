@@ -23,6 +23,10 @@ export function NotesApp({ vaultId, encryptionKey }: { vaultId: string, encrypti
   const [isRecording, setIsRecording] = useState(false);
   const [isPreview, setIsPreview] = useState(false);
 
+  // Detect if Web Speech API is available (not available on Android Capacitor or some browsers)
+  const speechAvailable = typeof window !== 'undefined' && 
+    !!(window as any).SpeechRecognition || !!(window as any).webkitSpeechRecognition;
+
   useEffect(() => {
     const handleExport = (e: any) => exportData((e as CustomEvent).detail);
     window.addEventListener('vault-export', handleExport);
@@ -250,18 +254,31 @@ export function NotesApp({ vaultId, encryptionKey }: { vaultId: string, encrypti
                 />
               )}
               {!isPreview && (
-                <button
-                  type="button"
-                  onClick={handleVoiceDictation}
-                  title="Voice Dictation"
-                  className={`absolute bottom-2 right-2 p-2 rounded-full transition-all shadow-sm ${
-                    isRecording 
-                      ? 'bg-red-500 text-white animate-pulse scale-110' 
-                      : 'bg-secondary text-muted-foreground hover:bg-primary hover:text-primary-foreground opacity-100'
-                  }`}
-                >
-                  <Mic className="w-4 h-4" />
-                </button>
+                <div className="absolute bottom-2 right-2">
+                  {speechAvailable ? (
+                    <button
+                      type="button"
+                      onClick={handleVoiceDictation}
+                      title="Voice Dictation"
+                      className={`p-2 rounded-full transition-all shadow-sm ${
+                        isRecording 
+                          ? 'bg-red-500 text-white animate-pulse scale-110' 
+                          : 'bg-secondary text-muted-foreground hover:bg-primary hover:text-primary-foreground'
+                      }`}
+                    >
+                      <Mic className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled
+                      title="Voice dictation requires browser mode (not available in app)"
+                      className="p-2 rounded-full bg-secondary/30 text-muted-foreground/30 cursor-not-allowed"
+                    >
+                      <Mic className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               )}
             </div>
             
