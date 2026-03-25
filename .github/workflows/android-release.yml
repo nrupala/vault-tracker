@@ -41,12 +41,16 @@ jobs:
         run: pnpm install
 
       - name: Build Vault Ecosystem
-        run: pnpm build
+        run: pnpm -r build
 
-      - name: Sync Capacitor Android
+      - name: Sync & Build Capacitor
         run: |
+          pnpm --filter vault-tracker build
           cd apps/vault-tracker
+          rm -rf android/app/src/main/assets/public/*
           npx cap sync android
+          # Verification: Check if the built assets contain the new Paperclip logic
+          grep -i "Paperclip" android/app/src/main/assets/public/assets/*.js || echo "WARNING: Paperclip logic not found in synced assets!"
 
       - name: Sync Version to Android
         run: |
