@@ -48,6 +48,14 @@ jobs:
           cd apps/vault-tracker
           npx cap sync android
 
+      - name: Sync Version to Android
+        run: |
+          VERSION=$(node -p "require('./apps/vault-tracker/package.json').version")
+          VERSION_CODE=${{ github.run_number }}
+          sed -i "s/versionCode [0-9]*/versionCode $VERSION_CODE/" apps/vault-tracker/android/app/build.gradle
+          sed -i "s/versionName \".*\"/versionName \"$VERSION\"/" apps/vault-tracker/android/app/build.gradle
+          echo "Synced Version: $VERSION ($VERSION_CODE)"
+
       - name: Build Android APK
         run: |
           cd apps/vault-tracker/android

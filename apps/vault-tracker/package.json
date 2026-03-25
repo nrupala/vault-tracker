@@ -1,7 +1,7 @@
 {
   "name": "vault-tracker",
   "private": true,
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "The world's most private zero-trust productivity and finance suite.",
   "author": "Nrupal Akolkar <nrupal@example.com>",
   "type": "module",
