@@ -11,6 +11,7 @@ import {
   Upload,
   Lock,
   BarChart3,
+  Heart,
   FileText,
   Activity,
   Wallet
@@ -194,13 +195,22 @@ export function AppShell({ children, activeTab, onTabChange }: AppShellProps) {
             </div>
           </div>
 
-          <button
-            onClick={lockVault}
-            className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-          >
-            <Lock className="w-4 h-4" />
-            Lock Vault
-          </button>
+          <div className="space-y-2">
+            <button
+              onClick={() => window.open('https://github.com/sponsors/nrupala', '_blank')}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-pink-500 hover:bg-pink-500/10 rounded-lg transition-colors group"
+            >
+              <Heart className="w-4 h-4 group-hover:fill-current transition-colors" />
+              Support Mission
+            </button>
+            <button
+              onClick={lockVault}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+            >
+              <Lock className="w-4 h-4" />
+              Lock Vault
+            </button>
+          </div>
         </div>
       </aside>
 
