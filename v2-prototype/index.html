@@ -3,51 +3,121 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sovereign Core v2.0 Mockup</title>
+    <title>Sovereign Vault v2.0 Prototype</title>
     <style>
-        :root { --p: #10b981; --bg: #0a0a0a; --fg: #fafafa; }
-        body { background: var(--bg); color: var(--fg); font-family: system-ui; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .card { border: 1px solid #333; padding: 2rem; rounded: 1rem; max-width: 400px; text-align: center; }
-        button { background: var(--p); color: black; border: none; padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: bold; cursor: pointer; }
-        pre { background: #1a1a1a; padding: 1rem; border-radius: 0.5rem; text-align: left; font-size: 0.8rem; overflow-x: auto; }
+        :root { --p: #10b981; --bg: #0a0a0a; --fg: #fafafa; --card: #141414; }
+        body { background: var(--bg); color: var(--fg); font-family: system-ui; padding: 2rem; max-width: 600px; mx: auto; }
+        .grid { display: grid; gap: 1.5rem; }
+        .card { background: var(--card); border: 1px solid #333; padding: 1.5rem; border-radius: 1rem; }
+        h1, h2, h3 { margin-top: 0; letter-spacing: -0.02em; }
+        button { background: var(--p); color: black; border: none; padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: bold; cursor: pointer; width: 100%; transition: opacity 0.2s; }
+        button:hover { opacity: 0.9; }
+        input, textarea { background: #000; border: 1px solid #333; color: white; padding: 0.75rem; border-radius: 0.5rem; width: 100%; box-sizing: border-box; }
+        pre { background: #000; padding: 1rem; border-radius: 0.5rem; font-size: 0.75rem; border: 1px solid #222; overflow: auto; max-height: 200px; }
+        .status { font-size: 0.7rem; opacity: 0.5; margin-bottom: 0.5rem; }
     </style>
 </head>
 <body>
-    <div class="card">
-        <h2>Sovereign Core v2.0</h2>
-        <p>Zero-Dependency / Buildless / Concrete</p>
-        <button id="testBtn">Test AES-GCM Crypto</button>
-        <pre id="output">Output will appear here...</pre>
+    <div class="grid">
+        <header>
+            <h1>🛡️ Sovereign Vault <span style="font-size: 0.8rem; opacity: 0.5;">v2.0-ALFA</span></h1>
+            <p style="opacity: 0.6; font-size: 0.9rem;">Atomic Hollow-Vessel Persistence (Buildless Architecture)</p>
+        </header>
+
+        <section class="card">
+            <h3>1. Content Entry</h3>
+            <div class="status">Simulating an import with sensitive metadata...</div>
+            <textarea id="inputText" placeholder="Enter secret note or task data...">Secret mission: Deploy the Sovereign Engine v2.0</textarea>
+            <div style="margin-top: 1rem; font-size: 0.8rem; display: flex; align-items: center; gap: 0.5rem;">
+                <input type="checkbox" id="scrubLocation" checked> <label for="scrubLocation">Auto-Scrub Geo-Tagging (51.5074 N)</label>
+            </div>
+        </section>
+
+        <section class="card">
+            <h3>2. Process & Persist</h3>
+            <button id="processBtn">Scrub, Encrypt & Save to SQLite</button>
+        </section>
+
+        <section id="vaultSection" class="card">
+            <h3>3. The Sovereign Ledger (Vault Status)</h3>
+            <div id="vesselCount" class="status">0 Vessels detected in SQLite</div>
+            <div id="vaultContent"></div>
+        </section>
+
+        <section class="card">
+            <h3>System Logs</h3>
+            <pre id="logs">Ready.</pre>
+        </section>
     </div>
 
     <script type="module">
         import { deriveSovereignKey, createHollowVessel } from './core/crypto.js';
+        import { initSovereignDB, saveVessel, getAllVessels } from './core/db.js';
+        import { scrubMetadata } from './core/scrubber.js';
 
-        async function testCrypto() {
-            const out = document.getElementById('output');
-            out.textContent = "Creating Hollow Vessels...";
+        const logs = document.getElementById('logs');
+        const vaultNode = document.getElementById('vaultContent');
+        const countNode = document.getElementById('vesselCount');
 
+        function log(msg) {
+            logs.textContent = `[${new Date().toLocaleTimeString()}] ${msg}\n` + logs.textContent;
+        }
+
+        async function refreshVault() {
             try {
-                const password = "sovereign-password";
-                const salt = crypto.getRandomValues(new Uint8Array(16));
-                const aesKey = await deriveSovereignKey(password, salt);
-
-                // Create two independent "Hollow Vessels"
-                const vessel1 = await createHollowVessel(aesKey, "task", { title: "Buy Milk" }, ["grocery"]);
-                const vessel2 = await createHollowVessel(aesKey, "note", { content: "Draft Vision" }, ["v2"]);
-
-                out.textContent = "🛡️ Success: 2 Atomic Vessels Created!\n\n" + 
-                    "Vessel 1 (Task) Ciphertext:\n" + 
-                    Array.from(new Uint8Array(vessel1.ciphertext).slice(0, 16)).map(b => b.toString(16)).join('') + "...\n\n" +
-                    "Vessel 2 (Note) Ciphertext:\n" + 
-                    Array.from(new Uint8Array(vessel2.ciphertext).slice(0, 16)).map(b => b.toString(16)).join('') + "...\n\n" +
-                    "Observation: Both look like random bytes to outsiders. Metadata is 100% hidden inside the vessels.";
+                const vessels = await getAllVessels();
+                countNode.textContent = `${vessels.length} Hollow Vessels detected in SQLite`;
+                vaultNode.innerHTML = vessels.map(v => `
+                    <div style="border-bottom: 1px solid #222; padding: 0.5rem 0; font-size: 0.7rem;">
+                        <span style="color: var(--p)">ID: ${v.id.slice(0, 8)}...</span> | 
+                        <span>TS: ${new Date(v.timestamp).toLocaleString()}</span>
+                    </div>
+                `).join('');
             } catch (e) {
-                out.textContent = "Error: " + e.message;
+                log(`!! Refresh Error: ${e.message}`);
             }
         }
 
-        document.getElementById('testBtn').onclick = testCrypto;
+        document.getElementById('processBtn').onclick = async () => {
+            log("--- Starting Sovereign Cycle ---");
+            const text = document.getElementById('inputText').value;
+            const scrub = document.getElementById('scrubLocation').checked;
+
+            try {
+                // 1. Initialize
+                log("Initializing SQLite WASM...");
+                await initSovereignDB();
+
+                // 2. Metadata Scrubbing
+                log("Inspecting Metadata...");
+                const rawData = { content: text, location: "51.5074 N, 1.1278 W", device: "Alpha-Terminal" };
+                const scrubbed = await scrubMetadata(rawData, scrub ? ['device'] : ['device', 'location']);
+                log(scrub ? "Scrubbed Location Tags." : "Location Tags Preserved.");
+
+                // 3. Key Derivation
+                log("Deriving Sovereign Key...");
+                const key = await deriveSovereignKey("user-pass", new Uint8Array(16));
+
+                // 4. Create Hollow Vessel
+                log("Creating Atomic Vessel...");
+                const vessel = await createHollowVessel(key, "note", scrubbed);
+
+                // 5. Persist to SQLite
+                log("Persisting to SQLite OPFS...");
+                const vesselId = crypto.randomUUID();
+                await saveVessel(vesselId, vessel.ciphertext, vessel.iv);
+                
+                log("✅ Vessel Successfully Saved.");
+                await refreshVault();
+
+            } catch (e) {
+                log(`❌ Error: ${e.message}`);
+                console.error(e);
+            }
+        };
+
+        // Initial Load
+        initSovereignDB().then(refreshVault);
     </script>
 </body>
 </html>
