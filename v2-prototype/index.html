@@ -44,24 +44,61 @@
             <div id="vaultContent"></div>
         </section>
 
+        <!-- Sovereign Companion HUD -->
+        <section class="card" style="border-color: var(--p);">
+            <h3 style="color: var(--p);">🤖 Sovereign Companion</h3>
+            <div id="companionChat" style="font-size: 0.8rem; height: 100px; overflow-y: auto; background: #000; padding: 0.5rem; border-radius: 0.5rem; margin-bottom: 1rem; border: 1px solid #222;">
+                Hello. I am your Sovereign Companion. I live 100% locally.
+            </div>
+            <input type="text" id="companionInput" placeholder="Ask me to 'Create Task' or 'Scan Vessels'...">
+        </section>
+
         <section class="card">
             <h3>System Logs</h3>
             <pre id="logs">Ready.</pre>
         </section>
     </div>
 
-    <script type="module">
         import { deriveSovereignKey, createHollowVessel } from './core/crypto.js';
         import { initSovereignDB, saveVessel, getAllVessels } from './core/db.js';
         import { scrubMetadata } from './core/scrubber.js';
+        import { parseSovereignIntent } from './core/companion.js';
 
         const logs = document.getElementById('logs');
         const vaultNode = document.getElementById('vaultContent');
         const countNode = document.getElementById('vesselCount');
+        const compChat = document.getElementById('companionChat');
+        const compInput = document.getElementById('companionInput');
 
         function log(msg) {
             logs.textContent = `[${new Date().toLocaleTimeString()}] ${msg}\n` + logs.textContent;
         }
+
+        function chat(msg) {
+            const div = document.createElement('div');
+            div.style.marginBottom = "0.4rem";
+            div.innerHTML = `<span style="color:var(--p)">[Companion]</span> ${msg}`;
+            compChat.appendChild(div);
+            compChat.scrollTop = compChat.scrollHeight;
+        }
+
+        compInput.onkeydown = async (e) => {
+            if (e.key === 'Enter') {
+                const text = compInput.value;
+                compInput.value = "";
+                chat(`Analyzing: "${text}"`);
+                const { intent, payload } = await parseSovereignIntent(text);
+                
+                if (intent === "CREATE_TASK") {
+                    chat(`Intent Recognized: **Create Task**. Creating vessel for "${payload}"...`);
+                    // Logic to auto-create vessel could go here
+                } else if (intent === "SECURITY_AUDIT") {
+                    chat(`Security Audit Triggered. ${payload}`);
+                } else {
+                    chat(payload);
+                }
+            }
+        };
 
         async function refreshVault() {
             try {
