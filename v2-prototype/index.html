@@ -23,21 +23,31 @@
         <div slot="content" class="layout">
             <!-- Main Application View -->
             <div class="app-view">
-                <section class="glass" style="padding: 2.5rem; height: 100%; box-sizing: border-box;">
-                    <h1 style="margin-bottom: 0.5rem;">Sovereign Tasks <sup>ALFA</sup></h1>
-                    <div class="hollow-stat" style="margin-bottom: 2rem;">Atomic Encryption Active</div>
-                    
-                    <div style="margin-bottom: 2rem;">
-                        <input type="text" id="taskInput" placeholder="Enter Task..." style="background: rgba(0,0,0,0.5); border: 1px solid #333; padding: 1.5rem; border-radius: 1.5rem; font-size: 1.2rem; width: 100%; box-sizing: border-box; color: white;">
-                    </div>
+                <sovereign-router id="router">
+                    <!-- Tasks Module -->
+                    <section slot="tasks" class="glass" style="padding: 2.5rem; height: 100%; box-sizing: border-box;">
+                        <h1 style="margin-bottom: 0.5rem;">Sovereign Tasks <sup>ALFA</sup></h1>
+                        <div class="hollow-stat" style="margin-bottom: 2rem;">Atomic Encryption Active</div>
+                        
+                        <div style="margin-bottom: 2rem;">
+                            <input type="text" id="taskInput" placeholder="Enter Task..." style="background: rgba(0,0,0,0.5); border: 1px solid #333; padding: 1.5rem; border-radius: 1.5rem; font-size: 1.2rem; width: 100%; box-sizing: border-box; color: white;">
+                        </div>
+                        <button id="addBtn" class="btn-primary">Seal into Vessel</button>
+                        
+                        <div style="margin-top: 3rem;">
+                            <h3>Active Hollow Ledger</h3>
+                            <sovereign-vessel-list id="vesselList"></sovereign-vessel-list>
+                        </div>
+                    </section>
 
-                    <button id="addBtn" class="btn-primary">Seal into Vessel</button>
-                    
-                    <div style="margin-top: 3rem;">
-                        <h3>Active Hollow Ledger</h3>
-                        <sovereign-vessel-list id="vesselList"></sovereign-vessel-list>
-                    </div>
-                </section>
+                    <!-- Notes Module -->
+                    <section slot="notes" class="glass" style="padding: 2.5rem; height: 100%; box-sizing: border-box;">
+                        <h1 style="margin-bottom: 0.5rem;">Sovereign Notes <sup>ALFA</sup></h1>
+                        <div class="hollow-stat" style="margin-bottom: 2rem;">Zero-Persistence Journaling</div>
+                        <textarea id="noteInput" placeholder="Write deep thoughts..." style="background: rgba(0,0,0,0.5); border: 1px solid #333; padding: 1.5rem; border-radius: 1.5rem; font-size: 1.1rem; width: 100%; height: 200px; box-sizing: border-box; color: white;"></textarea>
+                        <button id="saveNoteBtn" class="btn-primary" style="margin-top: 1rem;">Vault the Note</button>
+                    </section>
+                </sovereign-router>
             </div>
 
             <!-- Side Intelligence Bar -->
@@ -53,18 +63,25 @@
         </div>
     </sovereign-app-shell>
 
-    <!-- Buildless ESM Integration -->
     <script type="module" src="ui/SovereignAppShell.js"></script>
     <script type="module" src="ui/SovereignCompanionHUD.js"></script>
     <script type="module" src="ui/SovereignVesselList.js"></script>
+    <script type="module" src="ui/SovereignRouter.js"></script>
 
     <script type="module">
         import { deriveSovereignKey, createHollowVessel } from './core/crypto.js';
         import { initSovereignDB, saveVessel } from './core/db.js';
 
         const taskInput = document.getElementById('taskInput');
+        const noteInput = document.getElementById('noteInput');
         const addBtn = document.getElementById('addBtn');
+        const saveNoteBtn = document.getElementById('saveNoteBtn');
         const companion = document.getElementById('companion');
+
+        // Nav Active State logic (simplified for buildless)
+        window.addEventListener('hashchange', () => {
+             console.log(`Navigated to: ${window.location.hash}`);
+        });
 
         // Initialize Global Core
         initSovereignDB().then(() => console.log("Sovereign SQLite Ready."));
