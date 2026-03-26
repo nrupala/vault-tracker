@@ -3,178 +3,100 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sovereign Vault v2.0 Prototype</title>
+    <title>Sovereign Vault v2.0 - Grand Shell</title>
+    <link rel="stylesheet" href="ui/theme.css">
     <style>
-        :root { --p: #10b981; --bg: #0a0a0a; --fg: #fafafa; --card: #141414; }
-        body { background: var(--bg); color: var(--fg); font-family: system-ui; padding: 2rem; max-width: 600px; mx: auto; }
-        .grid { display: grid; gap: 1.5rem; }
-        .card { background: var(--card); border: 1px solid #333; padding: 1.5rem; border-radius: 1rem; }
-        h1, h2, h3 { margin-top: 0; letter-spacing: -0.02em; }
-        button { background: var(--p); color: black; border: none; padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: bold; cursor: pointer; width: 100%; transition: opacity 0.2s; }
-        button:hover { opacity: 0.9; }
-        input, textarea { background: #000; border: 1px solid #333; color: white; padding: 0.75rem; border-radius: 0.5rem; width: 100%; box-sizing: border-box; }
-        pre { background: #000; padding: 1rem; border-radius: 0.5rem; font-size: 0.75rem; border: 1px solid #222; overflow: auto; max-height: 200px; }
-        .status { font-size: 0.7rem; opacity: 0.5; margin-bottom: 0.5rem; }
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+        @media (max-width: 900px) {
+            .layout { grid-template-columns: 1fr; }
+        }
+        .app-view { min-height: 600px; }
     </style>
 </head>
 <body>
-    <div class="grid">
-        <header>
-            <h1>🛡️ Sovereign Vault <span style="font-size: 0.8rem; opacity: 0.5;">v2.0-ALFA</span></h1>
-            <p style="opacity: 0.6; font-size: 0.9rem;">Atomic Hollow-Vessel Persistence (Buildless Architecture)</p>
-        </header>
+    <sovereign-app-shell>
+        <div slot="content" class="layout">
+            <!-- Main Application View -->
+            <div class="app-view">
+                <section class="glass" style="padding: 2.5rem; height: 100%; box-sizing: border-box;">
+                    <h1 style="margin-bottom: 0.5rem;">Sovereign Tasks <sup>ALFA</sup></h1>
+                    <div class="hollow-stat" style="margin-bottom: 2rem;">Atomic Encryption Active</div>
+                    
+                    <div style="margin-bottom: 2rem;">
+                        <input type="text" id="taskInput" placeholder="Enter Task..." style="background: rgba(0,0,0,0.5); border: 1px solid #333; padding: 1.5rem; border-radius: 1.5rem; font-size: 1.2rem; width: 100%; box-sizing: border-box; color: white;">
+                    </div>
 
-        <section class="card">
-            <h3>1. Content Entry</h3>
-            <div class="status">Simulating an import with sensitive metadata...</div>
-            <textarea id="inputText" placeholder="Enter secret note or task data...">Secret mission: Deploy the Sovereign Engine v2.0</textarea>
-            <div style="margin-top: 1rem; font-size: 0.8rem; display: flex; align-items: center; gap: 0.5rem;">
-                <input type="checkbox" id="scrubLocation" checked> <label for="scrubLocation">Auto-Scrub Geo-Tagging (51.5074 N)</label>
+                    <button id="addBtn" class="btn-primary">Seal into Vessel</button>
+                    
+                    <div style="margin-top: 3rem;">
+                        <h3>Active Hollow Ledger</h3>
+                        <sovereign-vessel-list id="vesselList"></sovereign-vessel-list>
+                    </div>
+                </section>
             </div>
-        </section>
 
-        <section class="card">
-            <h3>2. Process & Persist</h3>
-            <button id="processBtn">Scrub, Encrypt & Save to SQLite</button>
-        </section>
+            <!-- Side Intelligence Bar -->
+            <aside style="display: grid; gap: 1.5rem; align-content: start;">
+                <sovereign-companion-hud id="companion"></sovereign-companion-hud>
+                
+                <section class="glass" style="padding: 1.5rem; font-size: 0.8rem; border-color: #3b82f633;">
+                    <h4 style="color: #3b82f6; margin-top: 0;">🌐 SECURE BROWSER</h4>
+                    <p style="opacity: 0.6;">Isolated research container simulator.</p>
+                    <button class="btn-primary" style="background: #3b82f6; padding: 0.5rem; font-size: 0.7rem; width: 100%; color: white;">Open Proxy View</button>
+                </section>
+            </aside>
+        </div>
+    </sovereign-app-shell>
 
-        <section id="vaultSection" class="card">
-            <h3>3. The Sovereign Ledger (Vault Status)</h3>
-            <div id="vesselCount" class="status">0 Vessels detected in SQLite</div>
-            <div id="vaultContent"></div>
-        </section>
-
-        <!-- Sovereign Companion HUD -->
-        <section class="card" style="border-color: var(--p);">
-            <h3 style="color: var(--p);">🤖 Sovereign Companion</h3>
-            <div id="companionChat" style="font-size: 0.8rem; height: 100px; overflow-y: auto; background: #000; padding: 0.5rem; border-radius: 0.5rem; margin-bottom: 1rem; border: 1px solid #222;">
-                Hello. I am your Sovereign Companion. I live 100% locally.
-            </div>
-            <input type="text" id="companionInput" placeholder="Ask me to 'Create Task' or 'Scan Vessels'...">
-        </section>
-
-        <!-- Sovereign Browser Simulation -->
-        <section class="card" style="border-color: #3b82f6;">
-            <h3 style="color: #3b82f6;">🌐 Sovereign Browser (Isolated)</h3>
-            <div class="status">Proxied research environment. No Host OS leaks.</div>
-            <div style="display: flex; gap: 0.5rem;">
-                <input type="text" placeholder="https://..." disabled value="https://sovereign.search">
-                <button style="background: #3b82f6; width: 60px;">GO</button>
-            </div>
-            <div style="margin-top: 1rem; border: 1px solid #222; height: 150px; background: #fafafa; display: flex; align-items: center; justify-content: center; color: #666; font-size: 0.8rem; border-radius: 0.5rem;">
-                [Isolated Browse View Mockup]
-            </div>
-        </section>
-
-        <section class="card">
-            <h3>System Logs</h3>
-            <pre id="logs">Ready.</pre>
-        </section>
-    </div>
+    <!-- Buildless ESM Integration -->
+    <script type="module" src="ui/SovereignAppShell.js"></script>
+    <script type="module" src="ui/SovereignCompanionHUD.js"></script>
+    <script type="module" src="ui/SovereignVesselList.js"></script>
 
     <script type="module">
         import { deriveSovereignKey, createHollowVessel } from './core/crypto.js';
-        import { initSovereignDB, saveVessel, getAllVessels } from './core/db.js';
-        import { scrubMetadata } from './core/scrubber.js';
-        import { parseSovereignIntent, saveCompanionMemory } from './core/companion.js';
+        import { initSovereignDB, saveVessel } from './core/db.js';
 
-        const logs = document.getElementById('logs');
-        const vaultNode = document.getElementById('vaultContent');
-        const countNode = document.getElementById('vesselCount');
-        const compChat = document.getElementById('companionChat');
-        const compInput = document.getElementById('companionInput');
+        const taskInput = document.getElementById('taskInput');
+        const addBtn = document.getElementById('addBtn');
+        const companion = document.getElementById('companion');
 
-        let sessionKey = null;
+        // Initialize Global Core
+        initSovereignDB().then(() => console.log("Sovereign SQLite Ready."));
 
-        function log(msg) {
-            logs.textContent = `[${new Date().toLocaleTimeString()}] ${msg}\n` + logs.textContent;
-        }
-
-        function chat(msg) {
-            const div = document.createElement('div');
-            div.style.marginBottom = "0.4rem";
-            div.innerHTML = `<span style="color:var(--p)">[Companion]</span> ${msg}`;
-            compChat.appendChild(div);
-            compChat.scrollTop = compChat.scrollHeight;
-        }
-
-        compInput.onkeydown = async (e) => {
-            if (e.key === 'Enter') {
-                const text = compInput.value;
-                compInput.value = "";
-                chat(`Analyzing: "${text}"`);
-                const { intent, payload } = await parseSovereignIntent(text);
-                
-                if (intent === "CREATE_TASK") {
-                    chat(`Intent Recognized: **Create Task**. Creating vessel for "${payload}"...`);
-                    if (sessionKey) {
-                        await saveCompanionMemory(null, sessionKey, `User wants to: ${payload}`);
-                        chat("Memory Persisted to Hollow Vessel.");
-                        await refreshVault();
-                    }
-                } else if (intent === "SECURITY_AUDIT") {
-                    chat(`Security Audit Triggered. Analysing SQLite vessels...`);
-                    const { performSecurityAudit } = await import('./core/companion.js');
-                    const audit = await performSecurityAudit();
-                    chat(`Vault Status: **${audit.status}**`);
-                    chat(`Vessels in SQLite: ${audit.vesselCount}`);
-                    chat(`Recommendation: ${audit.recommendation}`);
-                } else {
-                    chat(payload);
-                }
+        // Handle External Actions from Companion
+        window.addEventListener('sovereign-action', async (e) => {
+            const { type, title } = e.detail;
+            if (type === 'CREATE_TASK') {
+                taskInput.value = title;
+                addBtn.click();
             }
-        };
+        });
 
-        async function refreshVault() {
+        addBtn.onclick = async () => {
+            const val = taskInput.value.trim();
+            if(!val) return;
+            
             try {
-                const vessels = await getAllVessels();
-                countNode.textContent = `${vessels.length} Hollow Vessels detected in SQLite`;
-                vaultNode.innerHTML = vessels.map(v => `
-                    <div style="border-bottom: 1px solid #222; padding: 0.5rem 0; font-size: 0.7rem;">
-                        <span style="color: var(--p)">ID: ${v.id.slice(0, 8)}...</span> | 
-                        <span>TS: ${new Date(v.timestamp).toLocaleString()}</span>
-                    </div>
-                `).join('');
-            } catch (e) {
-                log(`!! Refresh Error: ${e.message}`);
-            }
-        }
-
-        document.getElementById('processBtn').onclick = async () => {
-            log("--- Starting Sovereign Cycle ---");
-            const text = document.getElementById('inputText').value;
-            const scrub = document.getElementById('scrubLocation').checked;
-
-            try {
-                log("Initializing SQLite WASM...");
-                await initSovereignDB();
-
-                log("Inspecting Metadata...");
-                const rawData = { content: text, location: "51.5074 N, 1.1278 W", device: "Alpha-Terminal" };
-                const scrubbed = await scrubMetadata(rawData, scrub ? ['device'] : ['device', 'location']);
-                log(scrub ? "Scrubbed Location Tags." : "Location Tags Preserved.");
-
-                log("Deriving Sovereign Key...");
                 const key = await deriveSovereignKey("user-pass", new Uint8Array(16));
-                sessionKey = key;
-
-                log("Creating Atomic Vessel...");
-                const vessel = await createHollowVessel(key, "note", scrubbed);
-
-                log("Persisting to SQLite OPFS...");
-                const vesselId = crypto.randomUUID();
-                await saveVessel(vesselId, vessel.ciphertext, vessel.iv);
+                const vessel = await createHollowVessel(key, "task", { title: val, status: 'pending' });
+                const id = `task_${crypto.randomUUID()}`;
                 
-                log("✅ Vessel Successfully Saved.");
-                await refreshVault();
-
+                await saveVessel(id, vessel.ciphertext, vessel.iv);
+                taskInput.value = "";
+                
+                // Signal refresh
+                window.dispatchEvent(new CustomEvent('sovereign-vessel-added'));
+                console.log("Vessel Sealed.");
             } catch (e) {
-                log(`❌ Error: ${e.message}`);
                 console.error(e);
             }
         };
-
-        initSovereignDB().then(refreshVault);
     </script>
 </body>
 </html>
