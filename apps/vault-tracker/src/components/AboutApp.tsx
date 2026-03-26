@@ -1,4 +1,4 @@
-import { Shield, Github, Heart, TrendingUp, Lock } from 'lucide-react';
+import { Shield, Github, Heart, Lock, Mic, RefreshCcw } from 'lucide-react';
 
 export function AboutApp() {
   return (
@@ -26,10 +26,20 @@ export function AboutApp() {
 
         <div className="bg-card border border-border p-6 rounded-2xl shadow-sm space-y-4 text-left">
           <h3 className="font-bold text-lg flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-orange-500" /> Financial Intel
+            <Mic className="w-5 h-5 text-pink-500" /> Voice-to-Vault
+          </h3>
+          <div className="text-sm text-muted-foreground space-y-2">
+            <p className="font-medium text-foreground italic">"Task [Title]" / "Expense [Amount]"</p>
+            <p>Rapid, hands-free entry using local-only semantic parsing. No voice data ever leaves your device.</p>
+          </div>
+        </div>
+
+        <div className="bg-card border border-border p-6 rounded-2xl shadow-sm space-y-4 text-left">
+          <h3 className="font-bold text-lg flex items-center gap-2">
+            <RefreshCcw className="w-5 h-5 text-blue-500" /> Sovereign Sync
           </h3>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            New in v2.1: **Intelligent Spending Analysis**. Track Needs vs. Wants and receive proactive alerts on category spikes.
+            Connect your preferred cloud (WebDAV, S3, GDrive). Vault Tracker syncs your data as **encrypted blobs**, ensuring zero exposure to the provider.
           </p>
         </div>
       </div>

@@ -12,6 +12,19 @@ Experience the full suite or use focused mini-apps for specific workflows:
 3. **[Vault Habits](file:///home/nrupal/vault-tracker/apps/vault-habits/README.md)**: Private consistency tracking for the privacy-conscious. ([Peak Performance Use Cases](file:///home/nrupal/vault-tracker/apps/vault-habits/usecase.md))
 4. **[Vault Ledger](file:///home/nrupal/vault-tracker/apps/vault-ledger/README.md)**: Zero-knowledge financial journal for "Needs vs Wants". ([Financial Intelligence Use Cases](file:///home/nrupal/vault-tracker/apps/vault-ledger/usecase.md))
 
+---
+
+## 🎙️ Hands-Free: Voice-to-Vault
+Vault Tracker supports local, privacy-first voice commands. 
+**Try saying**:
+- *"Task Buy groceries"*
+- *"Note The secret code is 1234"*
+- *"Expense 20 for Lunch"*
+- *"Habit Deep Meditation"*
+
+## 🔄 Sovereign Sync
+Back up your encrypted vault to your preferred cloud (WebDAV, S3, GDrive). Your data remains an **Unbreakable Blob**—indistinguishable from noise to the provider.
+
 ![Vault Tracker Icon](public/icon-512.png)
 
 ## ✨ New in v1.1.0
