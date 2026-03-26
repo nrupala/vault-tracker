@@ -164,7 +164,7 @@ export function useItems(activeVaultId: string | undefined, key: CryptoKey | nul
     return Array.from(tags);
   }, [items]);
 
-  const importData = useCallback(async (content: string, format: 'json' | 'text' | 'ics') => {
+  const importData = useCallback(async (content: string, format: 'json' | 'text' | 'ics' | 'csv') => {
     if (!activeVaultId || !key) throw new Error('Vault is locked');
 
     let count = 0;
@@ -205,6 +205,53 @@ export function useItems(activeVaultId: string | undefined, key: CryptoKey | nul
           dueDate: dateStr,
           status: 'todo'
         }, ['imported-ics'], 'medium');
+        count++;
+      }
+    } else if (format === 'csv') {
+      const rows = content.split('\n').filter(r => r.trim().length > 0);
+      if (rows.length < 2) throw new Error('CSV must have a header and at least one data row');
+      const headers = rows[0].split(',').map(h => h.trim().toLowerCase());
+      for (let i = 1; i < rows.length; i++) {
+        // Simple CSV splitter that handles basic commas (no quoted commas yet for simplicity)
+        const values = rows[i].split(',').map(v => v.trim());
+        const rowData: any = {};
+        headers.forEach((h, idx) => {
+          if (values[idx]) rowData[h] = values[idx];
+        });
+        
+        const type = (rowData.type || 'note') as 'note' | 'task' | 'habit' | 'expense';
+        const priority = (rowData.priority || 'medium') as any;
+        const tags = rowData.tags ? rowData.tags.split(';') : ['imported-csv'];
+        
+        let payload: any = {};
+        if (type === 'task') {
+          payload = { 
+            title: rowData.title || rowData.summary || 'Imported Task', 
+            description: rowData.description || rowData.content || '', 
+            dueDate: rowData.date || rowData.duedate || '',
+            status: rowData.status || 'todo'
+          };
+        } else if (type === 'habit') {
+          payload = { 
+            title: rowData.title || 'Imported Habit', 
+            frequency: rowData.frequency || 'daily', 
+            streak: parseInt(rowData.streak || '0') 
+          };
+        } else if (type === 'expense') {
+          payload = { 
+            title: rowData.title || 'Expense', 
+            amount: parseFloat(rowData.amount || '0'), 
+            category: rowData.category || 'Uncategorized', 
+            date: rowData.date || Date.now() 
+          };
+        } else {
+          payload = { 
+            title: rowData.title || 'Imported Note', 
+            content: rowData.content || rowData.description || values.join(' ') 
+          };
+        }
+        
+        await createItem(type, payload, tags, priority);
         count++;
       }
     }
