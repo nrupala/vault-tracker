@@ -9,7 +9,7 @@ export function AboutApp() {
         </div>
         <h2 className="text-4xl font-black tracking-tighter">Vault Tracker v1.1.0</h2>
         <p className="text-muted-foreground max-w-md mx-auto leading-relaxed">
-          The world's most private zero-trust productivity and finance suite. High-fidelity mobile experience with cross-format data portability.
+          Sync with Your Keys. Retain Your Sovereignty.. High-fidelity mobile experience with cross-format data portability.
         </p>
 
       </div>
