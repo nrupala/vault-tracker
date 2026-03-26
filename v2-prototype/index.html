@@ -66,6 +66,17 @@
                         </div>
                         <button id="addLedgerBtn" class="btn-primary">Seal Transaction</button>
                     </section>
+
+                    <!-- Tracker Module -->
+                    <section slot="tracker" class="glass" style="padding: 2.5rem; height: 100%; box-sizing: border-box;">
+                        <h1 style="margin-bottom: 0.5rem;">Sovereign Tracker <sup>ALFA</sup></h1>
+                        <div class="hollow-stat" style="margin-bottom: 2rem;">Metric Sovereignty</div>
+                        <div style="display: grid; grid-template-columns: 1fr 100px; gap: 1rem; margin-bottom: 1rem;">
+                            <input type="text" id="trackerMetric" placeholder="Metric (e.g. Weight)..." style="background: rgba(0,0,0,0.5); border: 1px solid #333; padding: 1rem; border-radius: 1rem; color: white;">
+                            <input type="number" id="trackerValue" placeholder="Value" style="background: rgba(0,0,0,0.5); border: 1px solid #333; padding: 1rem; border-radius: 1rem; color: white;">
+                        </div>
+                        <button id="addTrackerBtn" class="btn-primary">Record Metric Vessel</button>
+                    </section>
                 </sovereign-router>
             </div>
 
@@ -140,6 +151,12 @@
             sealVessel('ledger', { desc: ledgerDesc.value, amount: ledgerAmount.value });
             ledgerDesc.value = "";
             ledgerAmount.value = "";
+        };
+
+        addTrackerBtn.onclick = () => {
+            sealVessel('tracker', { metric: trackerMetric.value, value: trackerValue.value });
+            trackerMetric.value = "";
+            trackerValue.value = "";
         };
     </script>
 </body>
