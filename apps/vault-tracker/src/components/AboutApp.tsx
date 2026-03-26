@@ -1,4 +1,4 @@
-import { Shield, Github, Heart, Lock, Mic, RefreshCcw, History, Trash2 } from 'lucide-react';
+import { Shield, Github, Heart, Lock, Mic, RefreshCcw, History, Trash2, Calendar, Layout } from 'lucide-react';
 import { useVault, useSettings } from '@/lib/core';
 
 export function AboutApp() {
@@ -39,34 +39,56 @@ export function AboutApp() {
 
         <div className="bg-card border border-border p-6 rounded-2xl shadow-sm space-y-4 text-left">
           <h3 className="font-bold text-lg flex items-center gap-2">
-            <History className="w-5 h-5 text-purple-500" /> Data Retention
+            <RefreshCcw className="w-5 h-5 text-blue-500" /> Sovereign Sync
           </h3>
-          <div className="space-y-4">
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-muted-foreground font-medium uppercase">History Limit</span>
-              <span className="font-bold text-primary">{settings?.historyLimit} versions</span>
-            </div>
-            <input 
-              type="range" min="1" max="50" 
-              value={settings?.historyLimit || 5} 
-              onChange={(e) => updateSettings({ historyLimit: parseInt(e.target.value) })}
-              className="w-full accent-primary" 
-            />
-            
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-muted-foreground font-medium uppercase">Age Purge</span>
-              <span className="font-bold text-primary">{settings?.retentionDays} days</span>
-            </div>
-            <input 
-              type="range" min="1" max="365" 
-              value={settings?.retentionDays || 30} 
-              onChange={(e) => updateSettings({ retentionDays: parseInt(e.target.value) })}
-              className="w-full accent-primary" 
-            />
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Connect any **Universal Provider** (GDrive, WebDAV, Local FS). Sync data as **encrypted blobs**, ensuring zero exposure to the cloud.
+          </p>
+        </div>
 
-            <div className="flex items-center justify-between p-2 bg-secondary/50 rounded-lg">
+        <div className="bg-card border border-border p-6 rounded-2xl shadow-sm space-y-4 text-left">
+          <h3 className="font-bold text-lg flex items-center gap-2">
+            <Layout className="w-5 h-5 text-rose-500" /> Calendar Bible
+          </h3>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            High-fidelity organization. Your calendar is your Bible—now with **Safe-Point Versioning** to ensure your schedule is never lost.
+          </p>
+        </div>
+
+        <div className="bg-card border border-border p-6 rounded-2xl shadow-sm space-y-4 text-left md:col-span-2">
+          <h3 className="font-bold text-lg flex items-center gap-2">
+            <History className="w-5 h-5 text-purple-500" /> Data Retention Policy
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <div className="space-y-2">
+              <div className="flex justify-between items-center text-[10px] font-bold uppercase text-muted-foreground">
+                <span>History Limit</span>
+                <span className="text-primary">{settings?.historyLimit} versions</span>
+              </div>
+              <input 
+                type="range" min="1" max="50" 
+                value={settings?.historyLimit || 5} 
+                onChange={(e) => updateSettings({ historyLimit: parseInt(e.target.value) })}
+                className="w-full accent-primary" 
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex justify-between items-center text-[10px] font-bold uppercase text-muted-foreground">
+                <span>Age Purge</span>
+                <span className="text-primary">{settings?.retentionDays} days</span>
+              </div>
+              <input 
+                type="range" min="1" max="365" 
+                value={settings?.retentionDays || 30} 
+                onChange={(e) => updateSettings({ retentionDays: parseInt(e.target.value) })}
+                className="w-full accent-primary" 
+              />
+            </div>
+
+            <div className="flex items-center justify-between p-3 bg-secondary/50 rounded-xl">
               <div className="flex items-center gap-2 text-[10px] font-bold uppercase text-muted-foreground">
-                <Trash2 className="w-3.5 h-3.5 text-red-500" /> Auto-Archive Done
+                <Trash2 className="w-3.5 h-3.5 text-red-500" /> Auto-Archive
               </div>
               <button 
                 onClick={() => updateSettings({ autoArchiveCompleted: !settings?.autoArchiveCompleted })}
