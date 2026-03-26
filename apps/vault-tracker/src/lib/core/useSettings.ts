@@ -34,5 +34,23 @@ export function useSettings(vaultId: string | undefined) {
     setSettings(newSettings);
   };
 
-  return { settings, updateSettings };
+  const runRetentionPurge = useCallback(async () => {
+    if (!vaultId || !settings) return;
+    const now = Date.now();
+    const retentionMs = settings.retentionDays * 24 * 60 * 60 * 1000;
+    
+    // 1. Purge old history entries (v1.1.7)
+    await db.items.toCollection().modify(item => {
+      if (item.history) {
+        item.history = item.history.filter(h => (now - h.updatedAt) < retentionMs);
+      }
+    });
+
+    // 2. Auto-archive completed items (placeholder for Iteration 17)
+    if (settings.autoArchiveCompleted) {
+      console.log('🛡️ Resilience: Archive check for items older than', settings.archiveAfterDays);
+    }
+  }, [vaultId, settings]);
+
+  return { settings, updateSettings, runRetentionPurge };
 }

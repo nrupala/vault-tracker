@@ -1,4 +1,4 @@
-import { Shield, Github, Heart, Lock, Mic, RefreshCcw, History, Trash2, Calendar, Layout } from 'lucide-react';
+import { Shield, Github, Heart, Lock, Mic, RefreshCcw, History, Trash2, Calendar } from 'lucide-react';
 import { useVault, useSettings } from '@/lib/core';
 
 export function AboutApp() {
@@ -48,7 +48,7 @@ export function AboutApp() {
 
         <div className="bg-card border border-border p-6 rounded-2xl shadow-sm space-y-4 text-left">
           <h3 className="font-bold text-lg flex items-center gap-2">
-            <Layout className="w-5 h-5 text-rose-500" /> Calendar Bible
+            <Calendar className="w-5 h-5 text-rose-500" /> Calendar Bible
           </h3>
           <p className="text-sm text-muted-foreground leading-relaxed">
             High-fidelity organization. Your calendar is your Bible—now with **Safe-Point Versioning** to ensure your schedule is never lost.
