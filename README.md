@@ -26,6 +26,23 @@ Vault Tracker operates on a **Local-Only** data persistence model:
 3. **AES-GCM Encryption**: All content is encrypted *before* it hits the storage layer.
 4. **Decentralized Storage**: Data is saved in your browser's IndexedDB, accessible only through your master key.
 
+## 🛡️ The Trust Manifest: Why Vault Tracker?
+
+In an era of "Privacy Theater," Vault Tracker is built on **Absolute Privacy by Architecture**. We don't ask for your trust; we make it mathematically irrelevant.
+
+### 💎 Our USP: Unbreakable Sovereignty
+1. **Zero-Knowledge by Default**: We never see your password, your keys, or your data. Encryption happens on *your* CPU, using *your* entropy, before a single byte hits storage.
+2. **The "Unbreakable Blob" Philosophy**: If you choose to sync your data to the cloud, Vault Tracker only uploads **AES-256-GCM encrypted blobs**. To the cloud provider (Google, Dropbox, etc.), your data is indistinguishable from random noise.
+3. **No Account, No Tracking**: There are no "Sign-ups." Your identity is your Master Password. We don't use cookies, analytics, or trackers.
+4. **Local Mastery**: Your primary database is **IndexedDB** in your own browser. You own the hardware, you own the database, you own the keys.
+
+### 🔒 Why You Can Trust Us
+- **Open Cryptography**: We use the industry-standard **Web Crypto API**. No "proprietary" algorithms—just battle-tested mathematics.
+- **Self-Contained**: The app is a standalone productivity engine. It doesn't rely on a mystery backend that could be breached or shut down.
+- **Permanent Access**: Even if this website went offline, your local PWA would continue to function and decrypt your data forever.
+
+---
+
 ## 🛠️ Tech Stack
 - **Frontend**: React 19, TypeScript, Vite
 - **Styling**: Vanilla CSS, Framer Motion (Animations)
