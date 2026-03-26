@@ -72,25 +72,37 @@
         </section>
     </div>
 
+    <script type="module">
         import { deriveSovereignKey, createHollowVessel } from './core/crypto.js';
         import { initSovereignDB, saveVessel, getAllVessels } from './core/db.js';
         import { scrubMetadata } from './core/scrubber.js';
         import { parseSovereignIntent, saveCompanionMemory } from './core/companion.js';
 
-        // ... existing references ...
+        const logs = document.getElementById('logs');
+        const vaultNode = document.getElementById('vaultContent');
+        const countNode = document.getElementById('vesselCount');
         const compChat = document.getElementById('companionChat');
         const compInput = document.getElementById('companionInput');
 
-        let sessionKey = null; // Derived during first process
+        let sessionKey = null;
 
-        // ... existing log/chat ...
+        function log(msg) {
+            logs.textContent = `[${new Date().toLocaleTimeString()}] ${msg}\n` + logs.textContent;
+        }
+
+        function chat(msg) {
+            const div = document.createElement('div');
+            div.style.marginBottom = "0.4rem";
+            div.innerHTML = `<span style="color:var(--p)">[Companion]</span> ${msg}`;
+            compChat.appendChild(div);
+            compChat.scrollTop = compChat.scrollHeight;
+        }
 
         compInput.onkeydown = async (e) => {
             if (e.key === 'Enter') {
                 const text = compInput.value;
                 compInput.value = "";
                 chat(`Analyzing: "${text}"`);
-
                 const { intent, payload } = await parseSovereignIntent(text);
                 
                 if (intent === "CREATE_TASK") {
@@ -134,26 +146,21 @@
             const scrub = document.getElementById('scrubLocation').checked;
 
             try {
-                // 1. Initialize
                 log("Initializing SQLite WASM...");
                 await initSovereignDB();
 
-                // 2. Metadata Scrubbing
                 log("Inspecting Metadata...");
                 const rawData = { content: text, location: "51.5074 N, 1.1278 W", device: "Alpha-Terminal" };
                 const scrubbed = await scrubMetadata(rawData, scrub ? ['device'] : ['device', 'location']);
                 log(scrub ? "Scrubbed Location Tags." : "Location Tags Preserved.");
 
-                // 3. Key Derivation
                 log("Deriving Sovereign Key...");
                 const key = await deriveSovereignKey("user-pass", new Uint8Array(16));
-                sessionKey = key; // Store for companion use
+                sessionKey = key;
 
-                // 4. Create Hollow Vessel
                 log("Creating Atomic Vessel...");
                 const vessel = await createHollowVessel(key, "note", scrubbed);
 
-                // 5. Persist to SQLite
                 log("Persisting to SQLite OPFS...");
                 const vesselId = crypto.randomUUID();
                 await saveVessel(vesselId, vessel.ciphertext, vessel.iv);
@@ -167,7 +174,6 @@
             }
         };
 
-        // Initial Load
         initSovereignDB().then(refreshVault);
     </script>
 </body>
