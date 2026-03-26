@@ -41,9 +41,18 @@ export interface EncryptedItem {
   history?: { v: number; payload: ArrayBuffer; nonce: Uint8Array; updatedAt: number }[];
 }
 
+export interface VaultSettings {
+  id: string; // vaultId
+  historyLimit: number; // Max versions to keep (default 5)
+  retentionDays: number; // Days to keep history (default 30)
+  autoArchiveCompleted: boolean; // Auto-archive done items
+  archiveAfterDays: number; // Days after completion to archive
+}
+
 const db = new Dexie('VaultTrackerDB') as Dexie & {
   vaults: EntityTable<Vault, 'id'>,
-  items: EntityTable<EncryptedItem, 'id'>
+  items: EntityTable<EncryptedItem, 'id'>,
+  settings: EntityTable<VaultSettings, 'id'>
 };
 
 // Schema definition
@@ -56,16 +65,20 @@ db.version(2).stores({
   items: 'id, vaultId, type, createdAt, updatedAt, priority, isFlagged, color, *tags', 
 });
 
-db.version(3).stores({
-  items: 'id, vaultId, type, createdAt, updatedAt, priority, isFlagged, color, v, *tags', // Added v (version)
+db.version(4).stores({
+  settings: 'id'
 }).upgrade(async tx => {
-  // Migration: Initialize version and history for existing items
-  return tx.table('items').toCollection().modify(item => {
-    if (item.v === undefined) {
-      item.v = 1;
-      item.history = [];
-    }
-  });
+  // Migration: Initialize settings for existing vaults
+  const vaults = await tx.table('vaults').toArray();
+  for (const v of vaults) {
+    await tx.table('settings').put({
+      id: v.id,
+      historyLimit: 5,
+      retentionDays: 30,
+      autoArchiveCompleted: false,
+      archiveAfterDays: 30
+    });
+  }
 });
 
 // --- Resilience: Failsafe Migration (v1.1.6) ---
