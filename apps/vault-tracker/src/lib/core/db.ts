@@ -68,4 +68,31 @@ db.version(3).stores({
   });
 });
 
+// --- Resilience: Failsafe Migration (v1.1.6) ---
+
+/**
+ * Creates a "Rescue Snapshot" of the entire database before a migration.
+ * This is stored in a separate, temporary IndexedDB called 'VaultRescueDB'.
+ */
+export async function performRescueSnapshot() {
+  const rescueDB = new Dexie('VaultRescueDB');
+  rescueDB.version(1).stores({ backup: 'id' });
+  
+  const vData = await db.table('vaults').toArray();
+  const iData = await db.table('items').toArray();
+  
+  await rescueDB.table('backup').put({
+    id: 'latest_pre_migration',
+    timestamp: Date.now(),
+    data: { vaults: vData, items: iData }
+  });
+  console.log('🛡️ Resilience: Rescue Snapshot created.');
+}
+
+// Hook into version changes to trigger snapshots
+db.on('versionchange', () => {
+  console.warn('🛡️ Resilience: Schema update detected. Performing pre-flight snapshot...');
+  performRescueSnapshot();
+});
+
 export { db };
