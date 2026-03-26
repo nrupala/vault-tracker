@@ -10,7 +10,10 @@ import {
   Download,
   Upload,
   Lock,
-  BarChart3
+  BarChart3,
+  FileText,
+  Activity,
+  Wallet
 } from 'lucide-react';
 import { useTheme, Theme } from './ThemeProvider';
 import { useVault, useItems } from '@/lib/core';
@@ -55,10 +58,13 @@ export function AppShell({ children, activeTab, onTabChange }: AppShellProps) {
   };
 
   const navItems = [
+    { id: 'notes' as ActiveTab, label: 'Notes', icon: FileText, color: 'text-primary' },
     { id: 'tasks' as ActiveTab, label: 'Tasks', icon: CheckSquare, color: 'text-green-500' },
-    { id: 'analytics' as ActiveTab, label: 'Analytics', icon: BarChart3, color: 'text-orange-500' },
+    { id: 'habits' as ActiveTab, label: 'Habits', icon: Activity, color: 'text-orange-500' },
+    { id: 'ledger' as ActiveTab, label: 'Ledger', icon: Wallet, color: 'text-blue-500' },
+    { id: 'analytics' as ActiveTab, label: 'Analytics', icon: BarChart3, color: 'text-purple-500' },
     { id: 'calendar' as ActiveTab, label: 'Calendar', icon: Calendar, color: 'text-rose-500' },
-    { id: 'about' as ActiveTab, label: 'About', icon: Info, color: 'text-primary' },
+    { id: 'about' as ActiveTab, label: 'About', icon: Info, color: 'text-muted-foreground' },
   ];
 
   return (

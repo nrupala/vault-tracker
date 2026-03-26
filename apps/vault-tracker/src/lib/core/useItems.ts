@@ -164,6 +164,55 @@ export function useItems(activeVaultId: string | undefined, key: CryptoKey | nul
     return Array.from(tags);
   }, [items]);
 
+  const importData = useCallback(async (content: string, format: 'json' | 'text' | 'ics') => {
+    if (!activeVaultId || !key) throw new Error('Vault is locked');
+
+    let count = 0;
+    
+    if (format === 'json') {
+      try {
+        const data = JSON.parse(content);
+        const list = Array.isArray(data) ? data : [data];
+        for (const item of list) {
+          await createItem(item.type || 'note', item.payload || item, item.tags || [], item.priority || 'medium');
+          count++;
+        }
+      } catch (e) {
+        throw new Error('Invalid JSON format');
+      }
+    } else if (format === 'text') {
+      const lines = content.split('\n').filter(l => l.trim().length > 0);
+      for (const line of lines) {
+        await createItem('note', { content: line }, ['imported-txt'], 'medium');
+        count++;
+      }
+    } else if (format === 'ics') {
+      // Basic ICS Parser
+      const events = content.split('BEGIN:VEVENT');
+      events.shift(); // Remove header
+      for (const event of events) {
+        const summaryMatch = event.match(/SUMMARY:(.*)/);
+        const descriptionMatch = event.match(/DESCRIPTION:(.*)/);
+        const dtstartMatch = event.match(/DTSTART[:;](.*)/);
+        
+        const summary = summaryMatch ? summaryMatch[1].trim() : 'Unnamed Event';
+        const description = descriptionMatch ? descriptionMatch[1].trim() : '';
+        const dateStr = dtstartMatch ? dtstartMatch[1].trim() : '';
+        
+        await createItem('task', { 
+          title: summary, 
+          description,
+          dueDate: dateStr,
+          status: 'todo'
+        }, ['imported-ics'], 'medium');
+        count++;
+      }
+    }
+    
+    await loadItems();
+    return count;
+  }, [activeVaultId, key, createItem, loadItems]);
+
   return {
     items,
     allTags,
@@ -173,5 +222,7 @@ export function useItems(activeVaultId: string | undefined, key: CryptoKey | nul
     updateItem,
     deleteItem,
     exportData,
+    importData,
   };
 }
+
