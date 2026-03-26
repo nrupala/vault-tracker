@@ -35,3 +35,35 @@ Vault Tracker operates on a **Local-Only** data persistence model:
 ---
 Copyright © 2026 Nrupal Akolkar. Licensed under MIT.
 
+
+### Data Import Formats
+
+Vault Tracker supports importing data in JSON and CSV formats.
+
+#### CSV Format
+The first row must be a header. Supported columns:
+- **type**: task, note, habit, or expense (defaults to note)
+- **title**: The main heading of the item
+- **content** or **description**: Detailed text
+- **date** or **duedate**: ISO string or numeric timestamp
+- **priority**: low, medium, high, critical
+- **tags**: Semicolon-separated tags (e.g. "work;urgent")
+
+**Example Tasks CSV:**
+```csv
+type,title,description,priority,tags
+task,Buy Milk,Gallon of organic milk,high,personal;store
+task,Code Review,Review UI PR,critical,work
+```
+
+#### JSON Format
+Must be an array of objects.
+```json
+[
+  {
+    "type": "note",
+    "payload": { "title": "My Note", "content": "Sample content" },
+    "tags": ["sync"]
+  }
+]
+```
