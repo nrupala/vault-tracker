@@ -94,6 +94,7 @@ function VaultManager({ onUnlock }: { onUnlock: () => void }) {
             </div>
             <h1 className="text-2xl font-bold tracking-tight">Vault Tracker</h1>
             <p className="text-muted-foreground text-sm mt-1">Zero-Trust Encrypted Workspace</p>
+            <span className="text-[10px] text-muted-foreground/40 font-mono mt-2 uppercase tracking-widest">v1.1.0 Mobile + Data Import Ed.</span>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">

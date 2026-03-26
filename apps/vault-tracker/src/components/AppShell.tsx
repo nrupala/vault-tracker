@@ -1,21 +1,19 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Shield, 
-  CheckSquare, 
-  FileText, 
-  Activity, 
-  Menu, 
-  X, 
-  Download, 
-  Lock,
-  BarChart3,
+import {
+  CheckSquare,
   Calendar,
   Info,
-  Wallet
+  Menu,
+  X,
+  Shield,
+  Download,
+  Upload,
+  Lock,
+  BarChart3
 } from 'lucide-react';
 import { useTheme, Theme } from './ThemeProvider';
-import { useVault } from '@vault/core';
+import { useVault, useItems } from '@/lib/core';
 
 export type ActiveTab = 'notes' | 'tasks' | 'habits' | 'analytics' | 'calendar' | 'ledger' | 'about';
 
@@ -28,18 +26,39 @@ interface AppShellProps {
 export function AppShell({ children, activeTab, onTabChange }: AppShellProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const { theme, setTheme } = useTheme();
-  const { activeVault, lockVault } = useVault();
+  const { activeVault, lockVault, encryptionKey } = useVault();
+  const { importData } = useItems(activeVault?.id, encryptionKey);
+  const [importing, setImporting] = useState(false);
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
+  const handleImport = async (format: 'json' | 'text' | 'ics') => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = format === 'json' ? '.json' : format === 'ics' ? '.ics' : '.txt,.md';
+    input.onchange = async (e: any) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      setImporting(true);
+      try {
+        const content = await file.text();
+        const count = await importData(content, format);
+        alert(`Successfully imported ${count} items!`);
+      } catch (err: any) {
+        alert('Import failed: ' + err.message);
+      } finally {
+        setImporting(false);
+      }
+    };
+    input.click();
+  };
+
   const navItems = [
-    { id: 'notes' as ActiveTab, icon: FileText, label: 'Notes', color: 'text-blue-500' },
-    { id: 'tasks' as ActiveTab, icon: CheckSquare, label: 'Tasks', color: 'text-green-500' },
-    { id: 'habits' as ActiveTab, icon: Activity, label: 'Habits', color: 'text-purple-500' },
-    { id: 'calendar' as ActiveTab, icon: Calendar, label: 'Calendar', color: 'text-rose-500' },
-    { id: 'ledger' as ActiveTab, icon: Wallet, label: 'Ledger', color: 'text-amber-500' },
-    { id: 'analytics' as ActiveTab, icon: BarChart3, label: 'Analytics', color: 'text-orange-500' },
-    { id: 'about' as ActiveTab, icon: Info, label: 'About', color: 'text-primary' },
+    { id: 'tasks' as ActiveTab, label: 'Tasks', icon: CheckSquare, color: 'text-green-500' },
+    { id: 'analytics' as ActiveTab, label: 'Analytics', icon: BarChart3, color: 'text-orange-500' },
+    { id: 'calendar' as ActiveTab, label: 'Calendar', icon: Calendar, color: 'text-rose-500' },
+    { id: 'about' as ActiveTab, label: 'About', icon: Info, color: 'text-primary' },
   ];
 
   return (
@@ -68,7 +87,10 @@ export function AppShell({ children, activeTab, onTabChange }: AppShellProps) {
             <div className="p-2 bg-primary/10 rounded-xl">
               <Shield className="w-6 h-6 text-primary" />
             </div>
-            <span className="font-bold text-lg tracking-tight">Vault</span>
+            <div className="flex flex-col">
+              <span className="font-bold text-lg tracking-tight">Vault</span>
+              <span className="text-[10px] text-muted-foreground font-mono">v1.1.0</span>
+            </div>
           </div>
           <button onClick={toggleSidebar} className="md:hidden p-1 rounded-md hover:bg-secondary">
             <X className="w-5 h-5 text-muted-foreground" />
@@ -112,8 +134,9 @@ export function AppShell({ children, activeTab, onTabChange }: AppShellProps) {
         <div className="p-4 mt-auto border-t border-border space-y-4 shrink-0 pb-[max(calc(env(safe-area-inset-bottom)+1rem),5.5rem)] md:pb-4">
           <div className="space-y-1">
             <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Settings</p>
-            <div className="space-y-1">
-              <label className="text-[10px] uppercase font-bold text-muted-foreground px-2">Data &amp; Export</label>
+            
+            <div className="space-y-1 mb-4">
+              <label className="text-[10px] uppercase font-bold text-muted-foreground px-2">Data Management</label>
               <div className="flex flex-col gap-1 px-2 mt-1">
                 <button
                   onClick={() => window.dispatchEvent(new CustomEvent('vault-export', { detail: 'json' }))}
@@ -122,10 +145,18 @@ export function AppShell({ children, activeTab, onTabChange }: AppShellProps) {
                   <Download className="w-3.5 h-3.5" /> Export JSON
                 </button>
                 <button
-                  onClick={() => window.dispatchEvent(new CustomEvent('vault-export', { detail: 'csv' }))}
-                  className="text-left text-xs py-1.5 hover:text-primary transition-colors flex items-center gap-2"
+                  disabled={importing}
+                  onClick={() => handleImport('json')}
+                  className="text-left text-xs py-1.5 hover:text-primary transition-colors flex items-center gap-2 disabled:opacity-50"
                 >
-                  <Download className="w-3.5 h-3.5" /> Export CSV
+                  <Upload className="w-3.5 h-3.5" /> Import JSON
+                </button>
+                <button
+                  disabled={importing}
+                  onClick={() => handleImport('ics')}
+                  className="text-left text-xs py-1.5 hover:text-primary transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Calendar className="w-3.5 h-3.5" /> Import Calendar (.ics)
                 </button>
               </div>
             </div>

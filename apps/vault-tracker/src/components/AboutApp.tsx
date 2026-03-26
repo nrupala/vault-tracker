@@ -7,10 +7,11 @@ export function AboutApp() {
         <div className="inline-flex p-4 bg-primary/10 rounded-3xl mb-4">
           <Shield className="w-16 h-16 text-primary" />
         </div>
-        <h2 className="text-4xl font-black tracking-tighter">Vault Tracker v2.1</h2>
+        <h2 className="text-4xl font-black tracking-tighter">Vault Tracker v1.1.0</h2>
         <p className="text-muted-foreground max-w-md mx-auto leading-relaxed">
-          The world's most private productivity & finance suite. Zero-trust, zero-knowledge, and 100% yours.
+          The world's most private zero-trust productivity and finance suite. High-fidelity mobile experience with cross-format data portability.
         </p>
+
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
