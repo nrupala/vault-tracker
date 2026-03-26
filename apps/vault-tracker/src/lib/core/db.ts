@@ -35,6 +35,10 @@ export interface EncryptedItem {
   // The actual specific data payload (e.g. Note content, Checklists, Habit streaks)
   encryptedPayload: ArrayBuffer; 
   nonce: Uint8Array;
+
+  // Resilience & Versioning (v1.1.6+)
+  v: number; 
+  history?: { v: number; payload: ArrayBuffer; nonce: Uint8Array; updatedAt: number }[];
 }
 
 const db = new Dexie('VaultTrackerDB') as Dexie & {
@@ -49,7 +53,19 @@ db.version(1).stores({
 });
 
 db.version(2).stores({
-  items: 'id, vaultId, type, createdAt, updatedAt, priority, isFlagged, color, *tags', // Added color
+  items: 'id, vaultId, type, createdAt, updatedAt, priority, isFlagged, color, *tags', 
+});
+
+db.version(3).stores({
+  items: 'id, vaultId, type, createdAt, updatedAt, priority, isFlagged, color, v, *tags', // Added v (version)
+}).upgrade(async tx => {
+  // Migration: Initialize version and history for existing items
+  return tx.table('items').toCollection().modify(item => {
+    if (item.v === undefined) {
+      item.v = 1;
+      item.history = [];
+    }
+  });
 });
 
 export { db };

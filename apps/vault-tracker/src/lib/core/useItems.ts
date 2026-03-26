@@ -73,6 +73,8 @@ export function useItems(activeVaultId: string | undefined, key: CryptoKey | nul
       type,
       createdAt: Date.now(),
       updatedAt: Date.now(),
+      v: 1, // Start at v1
+      history: [],
       priority,
       isFlagged: false,
       color: 'none',
@@ -94,18 +96,29 @@ export function useItems(activeVaultId: string | undefined, key: CryptoKey | nul
 
      let newCiphertext = existing.encryptedPayload;
      let newNonce = existing.nonce;
+     let newV = (existing.v || 1) + 1;
+     let newHistory = existing.history || [];
 
-     // If payload changed, re-encrypt
+     // If payload changed, re-encrypt and capture history
      if (updates.payload !== undefined) {
-         const plaintextPayload = JSON.stringify(updates.payload);
-         const { ciphertext, nonce } = await encryptData(key, plaintextPayload);
-         newCiphertext = ciphertext;
-         newNonce = nonce;
+          const plaintextPayload = JSON.stringify(updates.payload);
+          const { ciphertext, nonce } = await encryptData(key, plaintextPayload);
+          
+          // Add current state to history before updating (cap at 5 entries)
+          newHistory = [
+            { v: existing.v || 1, payload: existing.encryptedPayload, nonce: existing.nonce, updatedAt: existing.updatedAt },
+            ...newHistory
+          ].slice(0, 5);
+
+          newCiphertext = ciphertext;
+          newNonce = nonce;
      }
 
      await db.items.update(id, {
          ...updates,
          updatedAt: Date.now(),
+         v: newV,
+         history: newHistory,
          encryptedPayload: newCiphertext,
          nonce: newNonce,
      });
