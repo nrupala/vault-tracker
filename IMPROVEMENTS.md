@@ -1,0 +1,25 @@
+# 🚀 Vault Tracker: Technical Improvements & Hardening
+
+To ensure production stability and zero-vulnerability status, the following improvements are prioritized for deployment.
+
+---
+
+## 🛡️ Security & Deprecations
+- [ ] **Patch Legacy Glob**: Update `glob` to `v10+` to resolve reported security vulnerabilities in the file-matching logic.
+- [ ] **Eslint Migration**: Transition to `@eslint/config-array` and `@eslint/object-schema` to eliminate deprecation warnings in the build pipeline.
+- [ ] **Rimraf Upgrade**: Update `rimraf` to `v5+` for better performance and support.
+- [ ] **Dependency Audit**: Run `pnpm audit fix` to resolve high-risk CVEs in the underlying utility libraries.
+
+## 🧱 Code Consistency & Architecture
+- [ ] **Uniform Lockfiles**: Remove all `package-lock.json` files and standardize on `pnpm-lock.yaml` across the entire fleet to prevent build-time "frozen-lockfile" errors.
+- [ ] **Shared Component Library**: (Long-term) Extract `AppShell`, `ThemeProvider`, and `IntelligenceEngine` into a shared internal package to eliminate "copy-paste" sync errors.
+- [ ] **Strict Typing**: Finalize absolute type safety in `useItems` and `useVoiceCommands` to prevent runtime crashes during data sync.
+
+## 🏷️ Brand Identity
+- [ ] **Slogan Integration**: Apply the unified slogan ("Sync with Your Keys. Retain Your Sovereignty.") across all platforms.
+- [ ] **Logo Refinement**: Ensure the 512px icon is consistently applied.
+
+## 🔄 Resilience & Failsafes
+- [ ] **Failsafe Migration Engine**: Automated pre-upgrade snapshots. If a schema migration fails, the vault automatically rolls back to the previous stable state.
+- [ ] **Item-Level Versioning**: Implement a version history for every task, note, and expense to enable "Time Travel" recovery and conflict resolution during sync.
+- [ ] **Integrity Checks**: Post-sync validation to ensure decrypted Blobs match the source checksums perfectly.

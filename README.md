@@ -15,6 +15,8 @@ Experience the full suite or use focused mini-apps for specific workflows:
 ---
 
 ## 🎙️ Hands-Free: Voice-to-Vault
+**Sync with Your Keys. Retain Your Sovereignty.**
+
 Vault Tracker supports local, privacy-first voice commands. 
 **Try saying**:
 - *"Task Buy groceries"*
