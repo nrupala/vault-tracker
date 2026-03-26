@@ -57,7 +57,30 @@ export function deriveRecommendations(items: DecryptedItem[]): Recommendation[] 
     });
   }
 
-  // 4. Security Intelligence (Meta)
+  // 4. Connective Intelligence: Tasks vs Finance (Busy week vs Overspending)
+  const highPriorityTasks = tasks.filter(t => t.priority === 'critical' || t.priority === 'high');
+  if (highPriorityTasks.length > 5 && (expenses.length > 10)) {
+     recommendations.push({
+      id: 'conn-01',
+      type: 'productivity',
+      title: 'High Burnout Risk',
+      description: 'High number of critical tasks detected alongside frequent financial transactions. Ensure you are taking breaks.',
+      priority: 'medium'
+    });
+  }
+
+  // 5. Connective Intelligence: Habits vs Tasks
+  if (lowStreaks.length > 0 && highPriorityTasks.length > 0) {
+      recommendations.push({
+      id: 'conn-02',
+      type: 'habit',
+      title: 'Habit-Task Conflict',
+      description: 'Critical tasks may be impacting your habit streaks. Try scheduling habits during low-intensity hours.',
+      priority: 'medium'
+    });
+  }
+
+  // 6. Security Intelligence (Meta)
   if (items.length > 100) {
     recommendations.push({
       id: 'sec-01',
