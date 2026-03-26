@@ -7,10 +7,10 @@ Vault Tracker is a premium, decentralized productivity suite designed for users 
 ### 🌐 The Vault Ecosystem
 Experience the full suite or use focused mini-apps for specific workflows:
 - **[Vault Tracker](https://nrupala.github.io/vault-tracker/)** (Parent App)
-- **[Vault Tasks](https://nrupala.github.io/vault-tasks/)** (Tasks & Calendar)
-- **[Vault Notes](https://nrupala.github.io/vault-notes/)** (Notes & Research)
-- **[Vault Habits](https://nrupala.github.io/vault-habits/)** (Habits & Streaks)
-- **[Vault Ledger](https://nrupala.github.io/vault-ledger/)** (Finance & Budget)
+1. **[Vault Tasks](file:///home/nrupal/vault-tracker/apps/vault-tasks/README.md)**: Hierarchical checklists, deadlines, and project tracking. ([Professional Use Cases](file:///home/nrupal/vault-tracker/apps/vault-tasks/usecase.md))
+2. **[Vault Notes](file:///home/nrupal/vault-tracker/apps/vault-notes/README.md)**: Rich-text knowledge base for sensitive intel and secrets. ([High-Security Use Cases](file:///home/nrupal/vault-tracker/apps/vault-notes/usecase.md))
+3. **[Vault Habits](file:///home/nrupal/vault-tracker/apps/vault-habits/README.md)**: Private consistency tracking for the privacy-conscious. ([Peak Performance Use Cases](file:///home/nrupal/vault-tracker/apps/vault-habits/usecase.md))
+4. **[Vault Ledger](file:///home/nrupal/vault-tracker/apps/vault-ledger/README.md)**: Zero-knowledge financial journal for "Needs vs Wants". ([Financial Intelligence Use Cases](file:///home/nrupal/vault-tracker/apps/vault-ledger/usecase.md))
 
 ![Vault Tracker Icon](public/icon-512.png)
 
