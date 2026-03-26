@@ -7,7 +7,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 // https://vitejs.dev/config/
 export default defineConfig({
   // Use relative base so it works on GitHub Pages subpaths like /vault-tracker/
-  base: '',
+  base: process.env.VITE_BASE_URL || './',
   plugins: [
     react(),
     tailwindcss(),
