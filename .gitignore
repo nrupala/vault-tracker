@@ -3,6 +3,10 @@ node_modules/
 .env
 .env.local
 
+# Project Evolution & Strategic Reports (Local Only)
+SOVEREIGN_EVOLUTION.md
+v2-prototype/
+
 # Build outputs
 dist/
 build/
