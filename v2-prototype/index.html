@@ -44,8 +44,27 @@
                     <section slot="notes" class="glass" style="padding: 2.5rem; height: 100%; box-sizing: border-box;">
                         <h1 style="margin-bottom: 0.5rem;">Sovereign Notes <sup>ALFA</sup></h1>
                         <div class="hollow-stat" style="margin-bottom: 2rem;">Zero-Persistence Journaling</div>
-                        <textarea id="noteInput" placeholder="Write deep thoughts..." style="background: rgba(0,0,0,0.5); border: 1px solid #333; padding: 1.5rem; border-radius: 1.5rem; font-size: 1.1rem; width: 100%; height: 200px; box-sizing: border-box; color: white;"></textarea>
-                        <button id="saveNoteBtn" class="btn-primary" style="margin-top: 1rem;">Vault the Note</button>
+                        <textarea id="noteInput" placeholder="Write deep thoughts..." style="background: rgba(0,0,0,0.5); border: 1px solid #333; padding: 1.5rem; border-radius: 1.5rem; font-size: 1.1rem; width: 100%; height: 200px; box-sizing: border-box; color: white; margin-bottom: 1rem;"></textarea>
+                        <button id="saveNoteBtn" class="btn-primary">Vault the Note</button>
+                    </section>
+
+                    <!-- Habits Module -->
+                    <section slot="habits" class="glass" style="padding: 2.5rem; height: 100%; box-sizing: border-box;">
+                        <h1 style="margin-bottom: 0.5rem;">Sovereign Habits <sup>ALFA</sup></h1>
+                        <div class="hollow-stat" style="margin-bottom: 2rem;">Consistency through Sovereignty</div>
+                        <input type="text" id="habitInput" placeholder="New Habit (e.g. Meditate)..." style="background: rgba(0,0,0,0.5); border: 1px solid #333; padding: 1.5rem; border-radius: 1.5rem; font-size: 1.2rem; width: 100%; box-sizing: border-box; color: white; margin-bottom: 1rem;">
+                        <button id="addHabitBtn" class="btn-primary">Initiate Habit Vessel</button>
+                    </section>
+
+                    <!-- Ledger Module -->
+                    <section slot="ledger" class="glass" style="padding: 2.5rem; height: 100%; box-sizing: border-box;">
+                        <h1 style="margin-bottom: 0.5rem;">Sovereign Ledger <sup>ALFA</sup></h1>
+                        <div class="hollow-stat" style="margin-bottom: 2rem;">Private Financial Footprint</div>
+                        <div style="display: grid; grid-template-columns: 1fr 120px; gap: 1rem; margin-bottom: 1rem;">
+                            <input type="text" id="ledgerDesc" placeholder="Description..." style="background: rgba(0,0,0,0.5); border: 1px solid #333; padding: 1rem; border-radius: 1rem; color: white;">
+                            <input type="number" id="ledgerAmount" placeholder="0.00" style="background: rgba(0,0,0,0.5); border: 1px solid #333; padding: 1rem; border-radius: 1rem; color: white;">
+                        </div>
+                        <button id="addLedgerBtn" class="btn-primary">Seal Transaction</button>
                     </section>
                 </sovereign-router>
             </div>
@@ -74,45 +93,53 @@
 
         const taskInput = document.getElementById('taskInput');
         const noteInput = document.getElementById('noteInput');
+        const habitInput = document.getElementById('habitInput');
+        const ledgerDesc = document.getElementById('ledgerDesc');
+        const ledgerAmount = document.getElementById('ledgerAmount');
+
         const addBtn = document.getElementById('addBtn');
         const saveNoteBtn = document.getElementById('saveNoteBtn');
-        const companion = document.getElementById('companion');
+        const addHabitBtn = document.getElementById('addHabitBtn');
+        const addLedgerBtn = document.getElementById('addLedgerBtn');
 
-        // Nav Active State logic (simplified for buildless)
-        window.addEventListener('hashchange', () => {
-             console.log(`Navigated to: ${window.location.hash}`);
-        });
+        // ... existing nav logic ...
 
-        // Initialize Global Core
-        initSovereignDB().then(() => console.log("Sovereign SQLite Ready."));
-
-        // Handle External Actions from Companion
-        window.addEventListener('sovereign-action', async (e) => {
-            const { type, title } = e.detail;
-            if (type === 'CREATE_TASK') {
-                taskInput.value = title;
-                addBtn.click();
-            }
-        });
-
-        addBtn.onclick = async () => {
-            const val = taskInput.value.trim();
-            if(!val) return;
-            
+        // Unified Vessel Sealing Function
+        async function sealVessel(type, data) {
             try {
                 const key = await deriveSovereignKey("user-pass", new Uint8Array(16));
-                const vessel = await createHollowVessel(key, "task", { title: val, status: 'pending' });
-                const id = `task_${crypto.randomUUID()}`;
+                const vessel = await createHollowVessel(key, type, data);
+                const id = `${type}_${crypto.randomUUID()}`;
                 
                 await saveVessel(id, vessel.ciphertext, vessel.iv);
-                taskInput.value = "";
                 
                 // Signal refresh
                 window.dispatchEvent(new CustomEvent('sovereign-vessel-added'));
-                console.log("Vessel Sealed.");
+                console.log(`Vessel [${type}] Sealed.`);
             } catch (e) {
                 console.error(e);
             }
+        }
+
+        addBtn.onclick = () => {
+            sealVessel('task', { title: taskInput.value });
+            taskInput.value = "";
+        };
+
+        saveNoteBtn.onclick = () => {
+            sealVessel('note', { content: noteInput.value });
+            noteInput.value = "";
+        };
+
+        addHabitBtn.onclick = () => {
+            sealVessel('habit', { title: habitInput.value, streak: 0 });
+            habitInput.value = "";
+        };
+
+        addLedgerBtn.onclick = () => {
+            sealVessel('ledger', { desc: ledgerDesc.value, amount: ledgerAmount.value });
+            ledgerDesc.value = "";
+            ledgerAmount.value = "";
         };
     </script>
 </body>
