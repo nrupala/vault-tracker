@@ -31,3 +31,18 @@ export async function decryptSovereignBlob(key, ciphertext, iv) {
     );
     return new TextDecoder().decode(decrypted);
 }
+
+/**
+ * Creates an "Atomic Vessel" - an independent, self-contained container
+ * where even the metadata is hidden globally.
+ */
+export async function createHollowVessel(key, type, payload, tags = []) {
+    const vesselData = {
+        type,
+        payload,
+        tags,
+        timestamp: Date.now()
+    };
+    
+    return await encryptSovereignBlob(key, JSON.stringify(vesselData));
+}

@@ -21,24 +21,27 @@
     </div>
 
     <script type="module">
-        import { deriveSovereignKey, encryptSovereignBlob } from './core/crypto.js';
+        import { deriveSovereignKey, createHollowVessel } from './core/crypto.js';
 
         async function testCrypto() {
             const out = document.getElementById('output');
-            out.textContent = "Deriving keys from module...";
+            out.textContent = "Creating Hollow Vessels...";
 
             try {
                 const password = "sovereign-password";
                 const salt = crypto.getRandomValues(new Uint8Array(16));
-                
                 const aesKey = await deriveSovereignKey(password, salt);
-                const { ciphertext } = await encryptSovereignBlob(aesKey, "Your Eternal Secret Data");
 
-                out.textContent = "Success (Modular ESM)!\n\n" + 
-                    "Ciphertext: " + Array.from(new Uint8Array(ciphertext)).map(b => b.toString(16).padStart(2, '0')).join('') + "\n\n" +
-                    "Module Path: ./core/crypto.js\n" +
-                    "Dependencies: 0\n" +
-                    "Build Tools: 0";
+                // Create two independent "Hollow Vessels"
+                const vessel1 = await createHollowVessel(aesKey, "task", { title: "Buy Milk" }, ["grocery"]);
+                const vessel2 = await createHollowVessel(aesKey, "note", { content: "Draft Vision" }, ["v2"]);
+
+                out.textContent = "🛡️ Success: 2 Atomic Vessels Created!\n\n" + 
+                    "Vessel 1 (Task) Ciphertext:\n" + 
+                    Array.from(new Uint8Array(vessel1.ciphertext).slice(0, 16)).map(b => b.toString(16)).join('') + "...\n\n" +
+                    "Vessel 2 (Note) Ciphertext:\n" + 
+                    Array.from(new Uint8Array(vessel2.ciphertext).slice(0, 16)).map(b => b.toString(16)).join('') + "...\n\n" +
+                    "Observation: Both look like random bytes to outsiders. Metadata is 100% hidden inside the vessels.";
             } catch (e) {
                 out.textContent = "Error: " + e.message;
             }
