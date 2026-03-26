@@ -33,3 +33,4 @@ apps/*/android/.gradle/
 Thumbs.db
 release/
 release/
+journey.md
