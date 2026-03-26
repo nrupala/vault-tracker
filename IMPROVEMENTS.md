@@ -15,9 +15,10 @@ To ensure production stability and zero-vulnerability status, the following impr
 - [ ] **Shared Component Library**: (Long-term) Extract `AppShell`, `ThemeProvider`, and `IntelligenceEngine` into a shared internal package to eliminate "copy-paste" sync errors.
 - [ ] **Strict Typing**: Finalize absolute type safety in `useItems` and `useVoiceCommands` to prevent runtime crashes during data sync.
 
-## 🏷️ Brand Identity
-- [ ] **Slogan Integration**: Apply the unified slogan ("Sync with Your Keys. Retain Your Sovereignty.") across all platforms.
-- [ ] **Logo Refinement**: Ensure the 512px icon is consistently applied.
+## 🌐 Integrations (Sovereign Webhooks)
+- [ ] **Public-Key Inbound Support**: Allow external scripts (e.g., a "Mail-to-Vault" bridge) to write encrypted items to a shared folder.
+- [ ] **Inbox Sweeper**: Automatically scan for new external blobs on startup and import them into the vault.
+- [ ] **Tokenized Access**: Allow specific tokens for specific providers to post data without full vault access.
 
 ## 🔄 Resilience & Failsafes
 - [ ] **Failsafe Migration Engine**: Automated pre-upgrade snapshots. If a schema migration fails, the vault automatically rolls back to the previous stable state.
