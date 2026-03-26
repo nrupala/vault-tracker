@@ -56,19 +56,20 @@ const db = new Dexie('VaultTrackerDB') as Dexie & {
 };
 
 // Schema definition
-db.version(1).stores({
-  vaults: 'id', // Primary key
-  items: 'id, vaultId, type, createdAt, updatedAt, priority, isFlagged, *tags', // Indexed fields
-});
-
-db.version(2).stores({
-  items: 'id, vaultId, type, createdAt, updatedAt, priority, isFlagged, color, *tags', 
+db.version(3).stores({
+  items: 'id, vaultId, type, createdAt, updatedAt, priority, isFlagged, color, v, *tags', 
+}).upgrade(async tx => {
+  return tx.table('items').toCollection().modify(item => {
+    if (item.v === undefined) {
+      item.v = 1;
+      item.history = [];
+    }
+  });
 });
 
 db.version(4).stores({
   settings: 'id'
 }).upgrade(async tx => {
-  // Migration: Initialize settings for existing vaults
   const vaults = await tx.table('vaults').toArray();
   for (const v of vaults) {
     await tx.table('settings').put({

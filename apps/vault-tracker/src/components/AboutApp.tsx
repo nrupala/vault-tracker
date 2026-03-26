@@ -1,6 +1,9 @@
-import { Shield, Github, Heart, Lock, Mic, RefreshCcw } from 'lucide-react';
+import { Shield, Github, Heart, Lock, Mic, RefreshCcw, History, Trash2 } from 'lucide-react';
+import { useVault, useSettings } from '@/lib/core';
 
 export function AboutApp() {
+  const { activeVault } = useVault();
+  const { settings, updateSettings } = useSettings(activeVault?.id);
   return (
     <div className="max-w-3xl mx-auto space-y-12 py-10">
       <div className="text-center space-y-4">
@@ -36,11 +39,43 @@ export function AboutApp() {
 
         <div className="bg-card border border-border p-6 rounded-2xl shadow-sm space-y-4 text-left">
           <h3 className="font-bold text-lg flex items-center gap-2">
-            <RefreshCcw className="w-5 h-5 text-blue-500" /> Sovereign Sync
+            <History className="w-5 h-5 text-purple-500" /> Data Retention
           </h3>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            Connect any **Universal Provider** (Google Drive, OneDrive, S3, WebDAV, or Local FS). Vault Tracker syncs your data as **encrypted blobs**, ensuring zero exposure to the provider.
-          </p>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-muted-foreground font-medium uppercase">History Limit</span>
+              <span className="font-bold text-primary">{settings?.historyLimit} versions</span>
+            </div>
+            <input 
+              type="range" min="1" max="50" 
+              value={settings?.historyLimit || 5} 
+              onChange={(e) => updateSettings({ historyLimit: parseInt(e.target.value) })}
+              className="w-full accent-primary" 
+            />
+            
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-muted-foreground font-medium uppercase">Age Purge</span>
+              <span className="font-bold text-primary">{settings?.retentionDays} days</span>
+            </div>
+            <input 
+              type="range" min="1" max="365" 
+              value={settings?.retentionDays || 30} 
+              onChange={(e) => updateSettings({ retentionDays: parseInt(e.target.value) })}
+              className="w-full accent-primary" 
+            />
+
+            <div className="flex items-center justify-between p-2 bg-secondary/50 rounded-lg">
+              <div className="flex items-center gap-2 text-[10px] font-bold uppercase text-muted-foreground">
+                <Trash2 className="w-3.5 h-3.5 text-red-500" /> Auto-Archive Done
+              </div>
+              <button 
+                onClick={() => updateSettings({ autoArchiveCompleted: !settings?.autoArchiveCompleted })}
+                className={`w-10 h-5 rounded-full transition-colors relative ${settings?.autoArchiveCompleted ? 'bg-primary' : 'bg-border'}`}
+              >
+                <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${settings?.autoArchiveCompleted ? 'left-6' : 'left-1'}`} />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
