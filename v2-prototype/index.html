@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sovereign Core v2.0 Mockup</title>
+    <style>
+        :root { --p: #10b981; --bg: #0a0a0a; --fg: #fafafa; }
+        body { background: var(--bg); color: var(--fg); font-family: system-ui; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .card { border: 1px solid #333; padding: 2rem; rounded: 1rem; max-width: 400px; text-align: center; }
+        button { background: var(--p); color: black; border: none; padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: bold; cursor: pointer; }
+        pre { background: #1a1a1a; padding: 1rem; border-radius: 0.5rem; text-align: left; font-size: 0.8rem; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>Sovereign Core v2.0</h2>
+        <p>Zero-Dependency / Buildless / Concrete</p>
+        <button id="testBtn">Test AES-GCM Crypto</button>
+        <pre id="output">Output will appear here...</pre>
+    </div>
+
+    <script type="module">
+        import { deriveSovereignKey, encryptSovereignBlob } from './core/crypto.js';
+
+        async function testCrypto() {
+            const out = document.getElementById('output');
+            out.textContent = "Deriving keys from module...";
+
+            try {
+                const password = "sovereign-password";
+                const salt = crypto.getRandomValues(new Uint8Array(16));
+                
+                const aesKey = await deriveSovereignKey(password, salt);
+                const { ciphertext } = await encryptSovereignBlob(aesKey, "Your Eternal Secret Data");
+
+                out.textContent = "Success (Modular ESM)!\n\n" + 
+                    "Ciphertext: " + Array.from(new Uint8Array(ciphertext)).map(b => b.toString(16).padStart(2, '0')).join('') + "\n\n" +
+                    "Module Path: ./core/crypto.js\n" +
+                    "Dependencies: 0\n" +
+                    "Build Tools: 0";
+            } catch (e) {
+                out.textContent = "Error: " + e.message;
+            }
+        }
+
+        document.getElementById('testBtn').onclick = testCrypto;
+    </script>
+</body>
+</html>
