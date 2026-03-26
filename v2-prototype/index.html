@@ -101,7 +101,12 @@
                         await refreshVault();
                     }
                 } else if (intent === "SECURITY_AUDIT") {
-                    chat(`Security Audit Triggered. ${payload}`);
+                    chat(`Security Audit Triggered. Analysing SQLite vessels...`);
+                    const { performSecurityAudit } = await import('./core/companion.js');
+                    const audit = await performSecurityAudit();
+                    chat(`Vault Status: **${audit.status}**`);
+                    chat(`Vessels in SQLite: ${audit.vesselCount}`);
+                    chat(`Recommendation: ${audit.recommendation}`);
                 } else {
                     chat(payload);
                 }
