@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Share2, Clock, MoreVertical, Trash2, Edit2, Copy, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { DecryptedItem } from '@vault/core';
+import { DecryptedItem } from '@/lib/core';
 
 export interface Attachment {
   id: string;

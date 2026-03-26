@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from 'react';
-import { useItems, type DecryptedItem } from '@vault/core';
+import { useItems, type DecryptedItem } from '@/lib/core';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, CheckCircle2, Target, Plus, X, FileText, CheckSquare, Activity } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useItems, type DecryptedItem } from '@vault/core';
+import { useItems, type DecryptedItem } from '@/lib/core';
 import { ContainerItem, type Attachment } from './ContainerItem';
 import { PenLine, Plus, X as CloseIcon, Hash, Mic, Bold, Italic, List, Eye, EyeOff, Paperclip, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';

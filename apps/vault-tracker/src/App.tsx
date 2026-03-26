@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, Lock, KeyRound, Plus, Github, Heart } from 'lucide-react';
 import { ThemeProvider } from './components/ThemeProvider';
-import { useVault, VaultProvider } from '@vault/core';
+import { useVault, VaultProvider } from '@/lib/core';
 import { NotesApp } from './components/NotesApp';
 import { TasksApp } from './components/TasksApp';
 import { HabitsApp } from './components/HabitsApp';
