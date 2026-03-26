@@ -21,8 +21,8 @@ function VaultManager({ onUnlock }: { onUnlock: () => void }) {
   const [selectedVaultId, setSelectedVaultId] = useState<string>('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [enableBiometrics, setEnableBiometrics] = useState(false);
 
   useEffect(() => {
     loadVaults();
@@ -148,10 +148,21 @@ function VaultManager({ onUnlock }: { onUnlock: () => void }) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full bg-background text-foreground border border-border pl-10 pr-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-muted-foreground"
-                  placeholder="Enter password"
-                  required
                 />
               </div>
+            </div>
+
+            <div className="flex items-center gap-2 px-1">
+              <input
+                type="checkbox"
+                id="biometric-toggle"
+                checked={enableBiometrics}
+                onChange={(e) => setEnableBiometrics(e.target.checked)}
+                className="w-4 h-4 rounded border-border bg-background text-primary focus:ring-primary/20 cursor-pointer"
+              />
+              <label htmlFor="biometric-toggle" className="text-xs font-medium text-muted-foreground cursor-pointer select-none">
+                Enable Biometric Unlock (Optional)
+              </label>
             </div>
 
             {error && <p className="text-destructive text-sm font-medium">{error}</p>}

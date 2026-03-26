@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import { useItems, type DecryptedItem } from '@/lib/core';
-import { BarChart3, TrendingUp, CheckCircle2, Flame, Award, Zap, Shield } from 'lucide-react';
+import { useItems, type DecryptedItem, deriveRecommendations, type Recommendation } from '@/lib/core';
+import { BarChart3, TrendingUp, CheckCircle2, Flame, Award, Zap, Shield, Lightbulb, ArrowUpRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export function AnalyticsApp({ vaultId, encryptionKey }: { vaultId: string, encryptionKey: CryptoKey }) {
@@ -55,7 +55,8 @@ export function AnalyticsApp({ vaultId, encryptionKey }: { vaultId: string, encr
         wants: wantsTotal,
         spikes
       },
-      priorityDist
+      priorityDist,
+      recommendations: deriveRecommendations(items)
     };
   }, [items]);
 
@@ -207,6 +208,41 @@ export function AnalyticsApp({ vaultId, encryptionKey }: { vaultId: string, encr
           </div>
         </div>
       </div>
+
+      {stats.recommendations.length > 0 && (
+        <div className="bg-primary/5 border border-primary/20 rounded-2xl p-6 shadow-sm overflow-hidden relative">
+          <div className="absolute -right-8 -top-8 text-primary/5">
+            <Lightbulb className="w-32 h-32 rotate-12" />
+          </div>
+          <div className="flex items-center gap-3 mb-6 relative">
+            <div className="p-2 bg-primary/20 rounded-xl">
+              <Lightbulb className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold tracking-tight">Ecosystem Insights</h3>
+              <p className="text-sm text-muted-foreground">Context-aware recommendations derived from your data.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative">
+            {stats.recommendations.map((rec: Recommendation) => (
+               <motion.div
+                key={rec.id}
+                whileHover={{ scale: 1.02 }}
+                className="bg-card border border-border/50 p-4 rounded-xl flex gap-4 items-start"
+               >
+                 <div className={`mt-1 p-1.5 rounded-lg ${rec.priority === 'high' ? 'bg-red-500/10 text-red-500' : rec.priority === 'medium' ? 'bg-orange-500/10 text-orange-500' : 'bg-blue-500/10 text-blue-500'}`}>
+                    <ArrowUpRight className="w-4 h-4" />
+                 </div>
+                 <div>
+                    <h4 className="font-bold text-sm">{rec.title}</h4>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{rec.description}</p>
+                 </div>
+               </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="bg-card border border-border p-8 rounded-2xl shadow-sm flex flex-col md:flex-row justify-between items-center text-center md:text-left gap-6">
           <div className="flex-1">
