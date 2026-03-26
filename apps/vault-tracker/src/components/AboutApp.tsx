@@ -1,4 +1,4 @@
-import { Shield, Github, Heart, Lock, Mic, RefreshCcw, History, Trash2, Calendar } from 'lucide-react';
+import { Shield, Github, Heart, Lock, Mic, RefreshCcw, History, Trash2, Calendar, Share2 } from 'lucide-react';
 import { useVault, useSettings } from '@/lib/core';
 
 export function AboutApp() {
