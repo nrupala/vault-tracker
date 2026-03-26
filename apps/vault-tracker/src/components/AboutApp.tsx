@@ -39,7 +39,7 @@ export function AboutApp() {
             <RefreshCcw className="w-5 h-5 text-blue-500" /> Sovereign Sync
           </h3>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Connect your preferred cloud (WebDAV, S3, GDrive). Vault Tracker syncs your data as **encrypted blobs**, ensuring zero exposure to the provider.
+            Connect any **Universal Provider** (Google Drive, OneDrive, S3, WebDAV, or Local FS). Vault Tracker syncs your data as **encrypted blobs**, ensuring zero exposure to the provider.
           </p>
         </div>
       </div>
