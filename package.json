@@ -13,5 +13,8 @@
   },
   "devDependencies": {
     "pnpm": "latest"
+  },
+  "dependencies": {
+    "@sqlite.org/sqlite-wasm": "^3.41.2"
   }
 }

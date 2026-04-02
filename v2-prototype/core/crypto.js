@@ -32,17 +32,42 @@ export async function decryptSovereignBlob(key, ciphertext, iv) {
     return new TextDecoder().decode(decrypted);
 }
 
+import { scrubMetadata } from './scrubber.js';
+
 /**
  * Creates an "Atomic Vessel" - an independent, self-contained container
  * where even the metadata is hidden globally.
  */
 export async function createHollowVessel(key, type, payload, tags = []) {
+    let sanitizedPayload = payload;
+
+    // If payload is a file-like object, scrub it
+    if (payload instanceof Blob) {
+        console.log(`Vault: Scrubbing [${type}] before sealing...`);
+        sanitizedPayload = await scrubMetadata(payload);
+    }
+
     const vesselData = {
         type,
-        payload,
+        payload: sanitizedPayload,
         tags,
         timestamp: Date.now()
     };
     
-    return await encryptSovereignBlob(key, JSON.stringify(vesselData));
+    // In v2.1, we'll implement chunked encryption for large Blobs
+    const serialized = (sanitizedPayload instanceof Blob) 
+        ? await sanitizedPayload.text() 
+        : JSON.stringify(vesselData);
+
+    return await encryptSovereignBlob(key, serialized);
+}
+
+export async function verifyVesselIntegrity(key, ciphertext, iv) {
+    try {
+        await decryptSovereignBlob(key, ciphertext, iv);
+        return true;
+    } catch (e) {
+        console.error("Vessel Integrity Violation:", e);
+        return false;
+    }
 }

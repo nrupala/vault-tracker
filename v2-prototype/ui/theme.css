@@ -1,0 +1,85 @@
+/**
+ * Sovereign Core v2.0 - Cinematic Design System
+ * Pure CSS. No build tools. 
+ */
+
+:root {
+    /* Sovereign Palette - Vibrant HSL */
+    --p: 160 80% 40%;    /* Sovereign Green */
+    --s: 220 90% 60%;    /* Cosmic Blue */
+    --a: 320 80% 60%;    /* Pulse Pink */
+    
+    /* Surface / Glassmorphism */
+    --bg: 0 0% 5%;
+    --card: 0 0% 10% / 0.7;
+    --border: 0 0% 100% / 0.1;
+    --glass: blur(12px) saturate(180%);
+    
+    /* Typography */
+    --font: 'Outfit', 'Inter', system-ui, sans-serif;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background-color: hsl(var(--bg));
+    color: white;
+    font-family: var(--font);
+    overflow-x: hidden;
+    background-image: 
+        radial-gradient(circle at 10% 20%, hsla(var(--p), 0.05), transparent 40%),
+        radial-gradient(circle at 80% 80%, hsla(var(--s), 0.05), transparent 40%);
+}
+
+.glass {
+    background: hsla(var(--card));
+    backdrop-filter: var(--glass);
+    -webkit-backdrop-filter: var(--glass);
+    border: 1px solid hsla(var(--border));
+    border-radius: 1.5rem;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass:hover {
+    border-color: hsla(var(--p), 0.3);
+    box-shadow: 0 20px 40px -10px hsla(0, 0%, 0%, 0.5);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, hsl(var(--p)), hsl(var(--s)));
+    color: black;
+    border: none;
+    padding: 1rem 2rem;
+    border-radius: 1rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    box-shadow: 0 10px 20px -5px hsla(var(--p), 0.4);
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 15px 30px -5px hsla(var(--p), 0.6);
+}
+
+.hollow-stat {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    color: hsla(var(--p), 0.6);
+    margin-bottom: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.hollow-stat::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    background: hsl(var(--p));
+    border-radius: 50%;
+    box-shadow: 0 0 10px hsl(var(--p));
+}

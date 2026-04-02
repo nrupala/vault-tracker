@@ -16,10 +16,122 @@
             .layout { grid-template-columns: 1fr; }
         }
         .app-view { min-height: 600px; }
+        
+        /* Authentication Screen */
+        #auth-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            flex-direction: column;
+        }
+        
+        .auth-container {
+            background: rgba(20, 20, 20, 0.9);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 2rem;
+            padding: 3rem;
+            width: 400px;
+            max-width: 90%;
+            text-align: center;
+        }
+        
+        .auth-logo {
+            font-size: 2rem;
+            font-weight: 900;
+            letter-spacing: -0.05em;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        
+        .auth-subtitle {
+            color: #10b981;
+            font-size: 0.8rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 2rem;
+        }
+        
+        .auth-input {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #333;
+            padding: 1.5rem;
+            border-radius: 1rem;
+            font-size: 1.1rem;
+            width: 100%;
+            box-sizing: border-box;
+            color: white;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+        
+        .auth-input:focus {
+            outline: none;
+            border-color: #10b981;
+        }
+        
+        .auth-btn {
+            background: #10b981;
+            color: black;
+            border: none;
+            padding: 1.2rem 2rem;
+            border-radius: 1rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.2s;
+        }
+        
+        .auth-btn:hover {
+            background: #0d9f6e;
+            transform: translateY(-2px);
+        }
+        
+        .auth-error {
+            color: #ef4444;
+            font-size: 0.8rem;
+            margin-top: 1rem;
+            min-height: 1.2rem;
+        }
+        
+        .auth-hint {
+            font-size: 0.7rem;
+            opacity: 0.5;
+            margin-top: 1.5rem;
+            line-height: 1.5;
+        }
     </style>
 </head>
 <body>
-    <sovereign-app-shell>
+    <!-- Authentication Screen -->
+    <div id="auth-screen">
+        <div class="auth-container">
+            <div class="auth-logo"><div class="dot" style="width: 12px; height: 12px; border-radius: 50%; background: #10b981; box-shadow: 0 0 20px #10b981;"></div> VAULT TRACKER</div>
+            <div class="auth-subtitle">Zero-Knowledge Authentication</div>
+            <input type="password" id="master-password" class="auth-input" placeholder="Enter Master Password" autofocus>
+            <button id="unlock-btn" class="auth-btn">Unlock Sovereign Vault</button>
+            <div id="auth-error" class="auth-error"></div>
+            <div class="auth-hint">
+                Your password is used to derive a local encryption key.<br>
+                No data leaves your device. No recovery possible.
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application (Hidden until authenticated) -->
+    <div id="app-container" style="display: none;">
+        <sovereign-app-shell>
         <div slot="content" class="layout">
             <!-- Main Application View -->
             <div class="app-view">
@@ -92,6 +204,7 @@
             </aside>
         </div>
     </sovereign-app-shell>
+    </div> <!-- End of app-container -->
 
     <script type="module" src="ui/SovereignAppShell.js"></script>
     <script type="module" src="ui/SovereignCompanionHUD.js"></script>
@@ -99,65 +212,202 @@
     <script type="module" src="ui/SovereignRouter.js"></script>
 
     <script type="module">
-        import { deriveSovereignKey, createHollowVessel } from './core/crypto.js';
-        import { initSovereignDB, saveVessel } from './core/db.js';
+        import { deriveSovereignKey, createHollowVessel, decryptSovereignBlob } from './core/crypto.js';
+        import { initSovereignDB, saveVessel, getAllVessels, deleteVessel, updateVessel } from './core/db.js';
+        import { syncBus } from './core/sync.js';
+        import { identity } from './core/identity.js';
 
+        // Authentication Elements
+        const authScreen = document.getElementById('auth-screen');
+        const appContainer = document.getElementById('app-container');
+        const masterPassword = document.getElementById('master-password');
+        const unlockBtn = document.getElementById('unlock-btn');
+        const authError = document.getElementById('auth-error');
+
+        // Global state
+        let currentKey = null;
+        let currentSalt = null;
+
+        // Authentication Handler
+        unlockBtn.onclick = async () => {
+            const password = masterPassword.value.trim();
+            if (!password) {
+                authError.textContent = "Password required";
+                return;
+            }
+
+            try {
+                authError.textContent = "Deriving encryption key...";
+                
+                // Generate or retrieve salt (in production, this would be stored)
+                currentSalt = window.crypto.getRandomValues(new Uint8Array(16));
+                
+                // Derive key using identity module
+                currentKey = await deriveSovereignKey(password, currentSalt);
+                
+                // Initialize database
+                await initSovereignDB();
+                
+                // Transition to app
+                authScreen.style.display = 'none';
+                appContainer.style.display = 'block';
+                
+                // Initialize sync bus
+                await syncBus.connect("user@sovereign", "pass");
+                
+                console.log("Vault unlocked successfully");
+            } catch (e) {
+                authError.textContent = "Authentication failed: " + e.message;
+                console.error(e);
+            }
+        };
+
+        // Enter key support for password
+        masterPassword.onkeydown = (e) => {
+            if (e.key === 'Enter') unlockBtn.click();
+        };
+
+        // Application Elements (only accessible after authentication)
         const taskInput = document.getElementById('taskInput');
         const noteInput = document.getElementById('noteInput');
         const habitInput = document.getElementById('habitInput');
         const ledgerDesc = document.getElementById('ledgerDesc');
         const ledgerAmount = document.getElementById('ledgerAmount');
+        const trackerMetric = document.getElementById('trackerMetric');
+        const trackerValue = document.getElementById('trackerValue');
 
         const addBtn = document.getElementById('addBtn');
         const saveNoteBtn = document.getElementById('saveNoteBtn');
         const addHabitBtn = document.getElementById('addHabitBtn');
         const addLedgerBtn = document.getElementById('addLedgerBtn');
-
-        // ... existing nav logic ...
+        const addTrackerBtn = document.getElementById('addTrackerBtn');
 
         // Unified Vessel Sealing Function
         async function sealVessel(type, data) {
+            if (!currentKey) {
+                console.error("Vault not unlocked");
+                return;
+            }
+
             try {
-                const key = await deriveSovereignKey("user-pass", new Uint8Array(16));
-                const vessel = await createHollowVessel(key, type, data);
+                const vessel = await createHollowVessel(currentKey, type, data);
                 const id = `${type}_${crypto.randomUUID()}`;
                 
                 await saveVessel(id, vessel.ciphertext, vessel.iv);
                 
-                // Signal refresh
+                // Signal refresh + broadcast to peers
                 window.dispatchEvent(new CustomEvent('sovereign-vessel-added'));
-                console.log(`Vessel [${type}] Sealed.`);
+                await syncBus.broadcastSignal(id);
+                console.log(`Vessel [${type}] Sealed & Broadcast.`);
             } catch (e) {
                 console.error(e);
             }
         }
 
+        // Decrypt and display vessel content
+        async function decryptVessel(vessel) {
+            if (!currentKey) return null;
+            
+            try {
+                const decrypted = await decryptSovereignBlob(
+                    currentKey, 
+                    vessel.blob, 
+                    vessel.iv
+                );
+                return JSON.parse(decrypted);
+            } catch (e) {
+                console.error("Failed to decrypt vessel:", e);
+                return null;
+            }
+        }
+
+        // Make decryptVessel globally available for UI components
+        window.decryptVessel = decryptVessel;
+        window.getCurrentKey = () => currentKey;
+
+        // Delete vessel handler
+        async function handleDeleteVessel(vesselId) {
+            if (!currentKey) return;
+            
+            try {
+                await deleteVessel(vesselId);
+                window.dispatchEvent(new CustomEvent('sovereign-vessel-added'));
+                console.log(`Vessel ${vesselId} deleted`);
+            } catch (e) {
+                console.error("Failed to delete vessel:", e);
+            }
+        }
+
+        window.handleDeleteVessel = handleDeleteVessel;
+
+        // Event handlers for all modules
         addBtn.onclick = () => {
-            sealVessel('task', { title: taskInput.value });
+            if (!taskInput.value.trim()) return;
+            sealVessel('task', { 
+                title: taskInput.value,
+                completed: false,
+                priority: 'normal',
+                createdAt: Date.now()
+            });
             taskInput.value = "";
         };
 
         saveNoteBtn.onclick = () => {
-            sealVessel('note', { content: noteInput.value });
+            if (!noteInput.value.trim()) return;
+            sealVessel('note', { 
+                content: noteInput.value,
+                tags: [],
+                createdAt: Date.now()
+            });
             noteInput.value = "";
         };
 
         addHabitBtn.onclick = () => {
-            sealVessel('habit', { title: habitInput.value, streak: 0 });
+            if (!habitInput.value.trim()) return;
+            sealVessel('habit', { 
+                title: habitInput.value, 
+                streak: 0,
+                lastCompleted: null,
+                createdAt: Date.now()
+            });
             habitInput.value = "";
         };
 
         addLedgerBtn.onclick = () => {
-            sealVessel('ledger', { desc: ledgerDesc.value, amount: ledgerAmount.value });
+            if (!ledgerDesc.value.trim()) return;
+            sealVessel('ledger', { 
+                desc: ledgerDesc.value, 
+                amount: parseFloat(ledgerAmount.value) || 0,
+                type: parseFloat(ledgerAmount.value) >= 0 ? 'income' : 'expense',
+                createdAt: Date.now()
+            });
             ledgerDesc.value = "";
             ledgerAmount.value = "";
         };
 
         addTrackerBtn.onclick = () => {
-            sealVessel('tracker', { metric: trackerMetric.value, value: trackerValue.value });
+            if (!trackerMetric.value.trim()) return;
+            sealVessel('tracker', { 
+                metric: trackerMetric.value, 
+                value: parseFloat(trackerValue.value) || 0,
+                unit: '',
+                createdAt: Date.now()
+            });
             trackerMetric.value = "";
             trackerValue.value = "";
         };
+
+        // Companion action handler
+        document.addEventListener('sovereign-action', (e) => {
+            if (e.detail.type === 'CREATE_TASK') {
+                sealVessel('task', { 
+                    title: e.detail.title,
+                    completed: false,
+                    priority: 'normal',
+                    createdAt: Date.now()
+                });
+            }
+        });
     </script>
 </body>
 </html>
