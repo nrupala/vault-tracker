@@ -1,47 +1,29 @@
-/**
- * Sovereign Core v2.0 - Companion Intent Engine (Buildless ESM)
- * Zero dependencies. Uses local semantic pattern matching.
- */
+export const COMPANION_MIND = { name: "Sovereign Helper", version: "2.0", capabilities: ["Task Routing", "Note Creation", "Ledger Support", "Habit Tracking", "Metadata Audit"] };
 
-export const COMPANION_MIND = {
-    name: "Sovereign Helper",
-    version: "0.1-Alfa",
-    capabilities: ["Task Routing", "Ledger Support", "Metadata Audit"]
-};
-
-/**
- * Parses user intent locally without sending strings to a cloud LLM.
- * In v3.0, this would use a local WebLLM.
- */
 export async function parseSovereignIntent(input) {
     const text = input.toLowerCase();
-    
-    // Intent: Create Task
-    if (text.includes("task") || text.includes("todo") || text.includes("remind")) {
-        return { intent: "CREATE_TASK", payload: input.replace(/task|todo|remind/i, "").trim() };
+    if (text.match(/^(add\s*)?task\s+(.+)/i) || text.match(/todo|remind/i)) {
+        return { intent: "CREATE_TASK", payload: text.replace(/^(add\s*)?task\s+/i, '').replace(/^(todo|remind)\s*/i, '').trim() };
     }
-    
-    // Intent: Log Expense
-    if (text.includes("spend") || text.includes("cost") || text.includes("$")) {
-        const amount = input.match(/\d+(\.\d+)?/);
-        return { intent: "LOG_EXPENSE", payload: { amount: amount ? amount[0] : 0, note: input } };
+    if (text.match(/^(take\s*)?note\s+(.+)/i)) {
+        return { intent: "CREATE_NOTE", payload: text.replace(/^(take\s*)?note\s+/i, '').trim() };
     }
-
-    // Intent: Security Audit
-    if (text.includes("security") || text.includes("safe") || text.includes("vessel")) {
-        return { intent: "SECURITY_AUDIT", payload: "Scanning Hollow Vessels..." };
+    if (text.match(/^(track\s*)?habit\s+(.+)/i)) {
+        return { intent: "CREATE_HABIT", payload: text.replace(/^(track\s*)?habit\s+/i, '').trim() };
     }
-
-    return { intent: "UNKNOWN", payload: "I am learning. Try 'Task [title]' or 'Security Audit'." };
+    if (text.match(/^(expense|spent|log|spend)\s+(\d+\.?\d*)\s*(for|on)?\s*(.+)/i)) {
+        const m = text.match(/^(expense|spent|log|spend)\s+(\d+\.?\d*)\s*(for|on)?\s*(.+)/i);
+        return { intent: "LOG_EXPENSE", payload: { amount: parseFloat(m[2]), desc: m[4] || m[1] } };
+    }
+    if (text.match(/security|audit|safe/i)) {
+        return { intent: "SECURITY_AUDIT", payload: "Scanning vault..." };
+    }
+    return { intent: "UNKNOWN", payload: "Try: \"Task [title]\", \"Note [text]\", \"Habit [name]\", \"Expense 20 for lunch\"" };
 }
 
-/**
- * Performs a local audit of the vault's health
- */
-export async function performSecurityAudit(vaultDb) {
+export async function performSecurityAudit() {
     const { getAllVessels } = await import('./db.js');
     const vessels = await getAllVessels();
-    
     return {
         vesselCount: vessels.length,
         status: vessels.length > 0 ? "Protected" : "Vulnerable (Empty Vault)",
@@ -49,23 +31,11 @@ export async function performSecurityAudit(vaultDb) {
     };
 }
 
-/**
- * Stores companion memories as encrypted Hollow Vessels
- */
-export async function saveCompanionMemory(vaultDb, key, memoryText) {
-    console.log(`Assistant Learning: ${memoryText}`);
-    
-    // Create an atomic hollow vessel for the memory
+export async function saveCompanionMemory(key, memoryText) {
     const { createHollowVessel } = await import('./crypto.js');
     const { saveVessel } = await import('./db.js');
-    
-    const vessel = await createHollowVessel(key, "companion_memory", {
-        content: memoryText,
-        ts: Date.now()
-    });
-
-    const memoryId = `mem_${crypto.randomUUID()}`;
-    await saveVessel(memoryId, vessel.ciphertext, vessel.iv);
-    
-    return memoryId;
+    const vessel = await createHollowVessel(key, "companion_memory", { content: memoryText, ts: Date.now() });
+    const id = `mem_${crypto.randomUUID()}`;
+    await saveVessel(id, vessel.ciphertext, vessel.iv);
+    return id;
 }

@@ -3,6 +3,8 @@
  * Pure Web Component.
  */
 
+import { exportVaultToBlob, importVaultFromBlob } from '../core/db.js';
+
 class SovereignAppShell extends HTMLElement {
     constructor() {
         super();
@@ -14,6 +16,45 @@ class SovereignAppShell extends HTMLElement {
         window.addEventListener('sovereign-vessel-added', () => {
             this.showNotification("Vessel Sealed: Metadata Scrubbed & Atomic Encryption Applied.");
         });
+        
+        this.setupCoreAccess();
+    }
+
+    setupCoreAccess() {
+        const exportBtn = this.shadowRoot.getElementById('export-btn');
+        const importBtn = this.shadowRoot.getElementById('import-btn');
+        const fileInput = this.shadowRoot.getElementById('import-file');
+
+        if(exportBtn) exportBtn.onclick = async () => {
+            try {
+                this.showNotification("Extracting OPFS Vault...");
+                const blob = await exportVaultToBlob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `sovereign-vault-${Date.now()}.db`;
+                a.click();
+                window.URL.revokeObjectURL(url);
+                this.showNotification("Vault Extracted to Local disk.");
+            } catch (e) {
+                this.showNotification("Export Error: " + e.message);
+            }
+        };
+
+        if(importBtn) importBtn.onclick = () => fileInput.click();
+
+        if(fileInput) fileInput.onchange = async (e) => {
+            if (!e.target.files.length) return;
+            const file = e.target.files[0];
+            try {
+                this.showNotification("Restoring Vault... Do not close window.");
+                await importVaultFromBlob(file);
+                this.showNotification("Vault Restored. Reloading Engine.");
+                setTimeout(() => window.location.reload(), 1500);
+            } catch (err) {
+                this.showNotification("Restore Failed: " + err.message);
+            }
+        };
     }
 
     showNotification(msg) {
@@ -31,11 +72,16 @@ class SovereignAppShell extends HTMLElement {
                     display: block;
                     width: 100%;
                     min-height: 100vh;
+                    display: flex;
+                    flex-direction: column;
                 }
                 .container {
                     padding: 2rem;
                     max-width: 1200px;
                     margin: 0 auto;
+                    flex: 1;
+                    width: 100%;
+                    box-sizing: border-box;
                 }
                 .nav {
                     display: flex;
@@ -75,6 +121,35 @@ class SovereignAppShell extends HTMLElement {
                     from { transform: translateX(100%); opacity: 0; }
                     to { transform: translateX(0); opacity: 1; }
                 }
+                .core-footer {
+                    background: rgba(10,10,10,0.8);
+                    border-top: 1px solid rgba(255,255,255,0.05);
+                    padding: 1rem 2rem;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    font-size: 0.8rem;
+                }
+                .core-btn {
+                    background: transparent;
+                    color: #888;
+                    border: 1px solid #333;
+                    padding: 0.5rem 1rem;
+                    border-radius: 0.5rem;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    font-family: inherit;
+                    font-weight: 500;
+                }
+                .core-btn:hover {
+                    color: white;
+                    border-color: #10b981;
+                    background: rgba(16, 185, 129, 0.1);
+                }
+                .danger-btn:hover {
+                    border-color: #ef4444;
+                    background: rgba(239, 68, 68, 0.1);
+                }
             </style>
             <div class="container">
                 <nav class="nav">
@@ -91,6 +166,18 @@ class SovereignAppShell extends HTMLElement {
                 </main>
                 <div id="notifications"></div>
             </div>
+            
+            <footer class="core-footer">
+                <div>
+                    <span style="opacity: 0.5;">CORE ENGINE:</span> 
+                    <span style="color: #10b981; font-family: monospace;">SQLite WASM (OPFS)</span>
+                </div>
+                <div style="display: flex; gap: 1rem;">
+                    <button id="import-btn" class="core-btn danger-btn">RESTORE VAULT (.db)</button>
+                    <button id="export-btn" class="core-btn">EXTRACT VAULT</button>
+                    <input type="file" id="import-file" accept=".db,.sqlite" style="display: none;">
+                </div>
+            </footer>
         `;
     }
 }
