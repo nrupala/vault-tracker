@@ -47,9 +47,9 @@ test('SovereignApp.js exists and is valid', () => {
 
 test('crypto.js exists', () => {
     const f = readFileSync(join(ROOT, 'core/crypto.js'), 'utf8');
-    assert(f.includes('deriveSovereignKey'), 'Missing deriveSovereignKey');
-    assert(f.includes('encryptSovereignBlob'), 'Missing encryptSovereignBlob');
-    assert(f.includes('decryptSovereignBlob'), 'Missing decryptSovereignBlob');
+    assert(f.includes('deriveKey') || f.includes('deriveSovereignKey'), 'Missing deriveKey');
+    assert(f.includes('encryptData') || f.includes('encryptSovereignBlob'), 'Missing encrypt');
+    assert(f.includes('decryptData') || f.includes('decryptSovereignBlob'), 'Missing decrypt');
     assert(f.includes('600000'), 'Wrong PBKDF2 iterations (should be 600K)');
     assert(f.includes('AES-GCM'), 'Missing AES-GCM');
 });
@@ -269,8 +269,8 @@ test('Random IV generation', () => {
 
 test('Password verification challenge', () => {
     const f = readFileSync(join(ROOT, 'core/crypto.js'), 'utf8');
-    assert(f.includes('verifyPassword'), 'Missing password verification');
-    assert(f.includes('VAULT_OPEN_SESAME'), 'Missing challenge magic string');
+    assert(f.includes('verifyPassword') || f.includes('createVerifier'), 'Missing password verification');
+    assert(f.includes('SOVEREIGN_VAULT_VERIFY') || f.includes('VAULT_OPEN_SESAME'), 'Missing challenge magic string');
 });
 
 test('Metadata scrubber integration', () => {

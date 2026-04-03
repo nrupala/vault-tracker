@@ -1,10 +1,12 @@
 /**
  * Sovereign Core v2.0 - Database Engine
- * SQLite WASM with IndexedDB fallback when OPFS/SharedArrayBuffer unavailable.
+ * IndexedDB-first (persistent) with SQLite WASM fallback.
+ * Salt stored as plain array (survives structured clone across reloads).
+ * Verifier stored for challenge-response password verification.
  */
 
 let db = null;
-let dbMode = 'none'; // 'opfs', 'memory', 'indexeddb'
+let dbMode = 'none';
 let initPromise = null;
 
 function log(level, msg, err) {
@@ -21,25 +23,25 @@ async function tryInitSQLite() {
         if (sqlite3.oo1.OpfsDb) {
             db = new sqlite3.oo1.OpfsDb('/sovereign-vault-v2.db');
             dbMode = 'opfs';
-            log('info', 'SQLite initialized on OPFS');
+            log('info', 'SQLite OPFS initialized');
         } else {
             db = new sqlite3.oo1.DB(':memory:');
             dbMode = 'memory';
-            log('warn', 'OPFS unavailable, using in-memory DB');
+            log('warn', 'OPFS unavailable, using in-memory SQLite');
         }
         return true;
     } catch (err) {
-        log('warn', 'SQLite WASM failed (COOP/COEP headers required), falling back to IndexedDB', err);
+        log('warn', 'SQLite failed, using IndexedDB', err);
         return false;
     }
 }
 
-// ── IndexedDB Fallback ──
+/* ── IndexedDB (persistent, survives reload) ── */
 let idb = null;
 
 function openIDB() {
     return new Promise((resolve, reject) => {
-        const req = indexedDB.open('sovereign-vault-v2', 1);
+        const req = indexedDB.open('sovereign-vault-v2', 2);
         req.onupgradeneeded = () => {
             const d = req.result;
             if (!d.objectStoreNames.contains('vessels')) d.createObjectStore('vessels', { keyPath: 'id' });
@@ -90,7 +92,6 @@ function idbGet(store, key) {
 export async function initSovereignDB() {
     if (db || idb) return db || idb;
     if (initPromise) return initPromise;
-
     initPromise = (async () => {
         const sqliteOk = await tryInitSQLite();
         if (sqliteOk) {
@@ -102,26 +103,24 @@ export async function initSovereignDB() {
                         isFlagged INTEGER DEFAULT 0, timestamp INTEGER, updatedAt INTEGER
                     );
                     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
-                    CREATE TABLE IF NOT EXISTS vaults (id TEXT PRIMARY KEY, name TEXT, salt BLOB, createdAt INTEGER);
+                    CREATE TABLE IF NOT EXISTS vaults (id TEXT PRIMARY KEY, name TEXT, salt BLOB, verifier BLOB, createdAt INTEGER);
                 `);
-            } catch (err) { log('error', 'SQLite schema creation failed', err); throw err; }
+            } catch (err) { log('error', 'SQLite schema failed', err); throw err; }
             return db;
         }
-
-        // Fallback to IndexedDB
         try {
             await openIDB();
             dbMode = 'indexeddb';
-            log('info', 'IndexedDB fallback initialized');
+            log('info', 'IndexedDB initialized (persistent)');
             return idb;
         } catch (err) { log('error', 'All storage backends failed', err); throw err; }
     })();
-
     return initPromise;
 }
 
 function useIDB() { return dbMode === 'indexeddb'; }
 
+/* ── Vessels ── */
 export async function saveVessel(id, blob, iv, type = '', tags = [], priority = 'medium', color = 'none', isFlagged = false) {
     await initSovereignDB();
     try {
@@ -190,6 +189,7 @@ export async function getVesselsByType(type) {
     } catch (err) { log('error', 'getVesselsByType failed', err); throw err; }
 }
 
+/* ── Settings ── */
 export async function getSetting(key) {
     await initSovereignDB();
     try {
@@ -208,68 +208,99 @@ export async function setSetting(key, value) {
     } catch (err) { log('error', 'setSetting failed', err); throw err; }
 }
 
-export async function saveVault(id, name, salt) {
+/* ── Vaults (persistent across sessions) ── */
+
+/**
+ * Save vault with challenge-verifier.
+ * Salt is stored as plain array (survives IndexedDB structured clone).
+ * Verifier is stored as { ciphertext: ArrayBuffer, iv: ArrayBuffer } for password verification.
+ */
+export async function saveVault(id, name, salt, verifier = null) {
     await initSovereignDB();
     try {
-        if (useIDB()) { await idbPut('vaults', { id, name, salt, createdAt: Date.now() }); return; }
-        db.exec({ sql: 'INSERT OR REPLACE INTO vaults VALUES (?,?,?,?)', bind: [id, name, salt, Date.now()] });
+        // Convert Uint8Array to plain array for IndexedDB persistence
+        const saltArr = salt instanceof Uint8Array ? Array.from(salt) : salt;
+        if (useIDB()) {
+            await idbPut('vaults', { id, name, salt: saltArr, verifier, createdAt: Date.now() });
+        } else {
+            const saltBlob = salt instanceof Uint8Array ? salt : new Uint8Array(salt);
+            db.exec({ sql: 'INSERT OR REPLACE INTO vaults VALUES (?,?,?,?,?)',
+                bind: [id, name, saltBlob, verifier ? verifier.ciphertext : null, Date.now()] });
+        }
     } catch (err) { log('error', 'saveVault failed', err); throw err; }
 }
 
+/**
+ * Get all vaults. Salt is reconstructed as Uint8Array from stored array.
+ * Verifier is preserved for challenge-response authentication.
+ */
 export async function getAllVaults() {
     await initSovereignDB();
     try {
         if (useIDB()) {
             const rows = await idbGetAll('vaults');
-            return rows.sort((a, b) => b.createdAt - a.createdAt);
+            return rows.map(r => ({
+                ...r,
+                salt: new Uint8Array(r.salt || []),
+                verifier: r.verifier || null
+            })).sort((a, b) => b.createdAt - a.createdAt);
         }
         const rows = [];
         db.exec({ sql: 'SELECT * FROM vaults ORDER BY createdAt DESC', rowMode: 'object', callback: r => rows.push(r) });
-        return rows;
+        return rows.map(r => ({
+            ...r,
+            salt: r.salt instanceof Uint8Array ? r.salt : new Uint8Array(r.salt || []),
+            verifier: r.verifier ? { ciphertext: r.verifier, iv: new Uint8Array(12) } : null
+        }));
     } catch (err) { log('error', 'getAllVaults failed', err); throw err; }
+}
+
+/**
+ * Delete a vault and all its vessels.
+ */
+export async function deleteVault(id) {
+    await initSovereignDB();
+    try {
+        if (useIDB()) {
+            await idbDelete('vaults', id);
+            const vessels = await idbGetAll('vessels');
+            for (const v of vessels) {
+                if (v.id.startsWith(id + '_')) await idbDelete('vessels', v.id);
+            }
+        } else {
+            db.exec({ sql: 'DELETE FROM vaults WHERE id = ?', bind: [id] });
+            db.exec({ sql: 'DELETE FROM vessels WHERE id LIKE ?', bind: [id + '_%'] });
+        }
+    } catch (err) { log('error', 'deleteVault failed', err); throw err; }
 }
 
 export async function exportVaultToBlob() {
     try {
-        if (!navigator.storage || !navigator.storage.getDirectory) {
-            throw new Error('File System Access API not supported. Use export JSON/CSV instead.');
-        }
+        if (!navigator.storage || !navigator.storage.getDirectory) throw new Error('File System API not supported. Use JSON/CSV export.');
         const root = await navigator.storage.getDirectory();
         const fh = await root.getFileHandle('sovereign-vault-v2.db');
         return await fh.getFile();
     } catch (err) {
         log('error', 'exportVaultToBlob failed', err);
-        throw new Error('Vault export failed: ' + (err.message || 'Unknown error'));
+        throw new Error('Export failed: ' + (err.message || 'Unknown'));
     }
 }
 
 export async function importVaultFromBlob(fileBlob) {
     try {
-        if (!(fileBlob instanceof Blob)) {
-            throw new Error('Import requires a valid Blob or File object.');
-        }
-        if (!navigator.storage || !navigator.storage.getDirectory) {
-            throw new Error('File System Access API not supported. Use import JSON/CSV instead.');
-        }
+        if (!(fileBlob instanceof Blob)) throw new Error('Requires a valid Blob/File.');
+        if (!navigator.storage || !navigator.storage.getDirectory) throw new Error('File System API not supported.');
         const root = await navigator.storage.getDirectory();
         const fh = await root.getFileHandle('sovereign-vault-v2.db', { create: true });
         const w = await fh.createWritable();
         await w.write(fileBlob);
         await w.close();
-        log('info', 'Vault imported from blob. Reload required.');
+        log('info', 'Vault imported. Reload required.');
         return true;
     } catch (err) {
         log('error', 'importVaultFromBlob failed', err);
-        throw new Error('Vault import failed: ' + (err.message || 'Unknown error'));
+        throw new Error('Import failed: ' + (err.message || 'Unknown'));
     }
-}
-
-export async function deleteVault(id) {
-    await initSovereignDB();
-    try {
-        if (useIDB()) { await idbDelete('vaults', id); }
-        else { db.exec({ sql: 'DELETE FROM vaults WHERE id = ?', bind: [id] }); }
-    } catch (err) { log('error', 'deleteVault failed', err); throw err; }
 }
 
 export function getDBMode() { return dbMode; }

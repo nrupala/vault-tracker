@@ -1,7 +1,7 @@
 /**
  * Sovereign App v2.0 - Containerized Web Component
- * Shadow DOM isolation, tabbed UI, zero external dependencies.
- * Clean, minimal, Apple-inspired design.
+ * Shadow DOM, tabbed UI, zero external dependencies.
+ * Features: full edit modals, all calendar views, vault persistence, challenge-verifier auth.
  */
 
 class SovereignApp extends HTMLElement {
@@ -17,6 +17,7 @@ class SovereignApp extends HTMLElement {
         this._tab = 'tasks';
         this._calDate = new Date();
         this._calView = 'month';
+        this._calFilter = 'all';
         this._settings = { historyLimit: 5, retentionDays: 30, autoArchive: false };
         this._ledgerStats = null;
         this._themeIdx = 0;
@@ -31,11 +32,7 @@ class SovereignApp extends HTMLElement {
 
     /* ── Utility ── */
     _esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
-
-    _log(level, msg, err) {
-        if (level === 'error') console.error('[App]', msg, err || '');
-        else if (level === 'warn') console.warn('[App]', msg, err || '');
-    }
+    _log(level, msg, err) { if (level === 'error') console.error('[App]', msg, err || ''); else if (level === 'warn') console.warn('[App]', msg, err || ''); }
 
     _themes() {
         return [
@@ -49,10 +46,8 @@ class SovereignApp extends HTMLElement {
 
     _applyTheme(idx) {
         const t = this._themes()[idx];
-        this.style.setProperty('--bg', t.bg);
-        this.style.setProperty('--s1', t.s1);
-        this.style.setProperty('--s2', t.s2);
-        this.style.setProperty('--t1', t.t1);
+        this.style.setProperty('--bg', t.bg); this.style.setProperty('--s1', t.s1);
+        this.style.setProperty('--s2', t.s2); this.style.setProperty('--t1', t.t1);
         this.style.setProperty('--t2', t.t2);
     }
 
@@ -77,24 +72,17 @@ class SovereignApp extends HTMLElement {
         const el = this._shadow.getElementById('auth-mode');
         if (el) el.dataset.mode = mode;
         this._authErr('');
-        const pw = this._shadow.getElementById('auth-pw');
-        const vni = this._shadow.getElementById('vault-name-input');
-        const vsg = this._shadow.getElementById('vault-select-group');
-        const vng = this._shadow.getElementById('vault-name-group');
+        const pw = this._shadow.getElementById('auth-pw'); if (pw) pw.value = '';
+        const vni = this._shadow.getElementById('vault-name-input'); if (vni) vni.value = '';
+        const vsg = this._shadow.getElementById('vault-select-group'); if (vsg) vsg.style.display = 'block';
+        const vng = this._shadow.getElementById('vault-name-group'); if (vng) vng.style.display = mode === 'create' ? 'block' : 'none';
         const lbl = this._shadow.getElementById('auth-pw-label');
-        const btn = this._shadow.getElementById('auth-submit');
-        const cl = this._shadow.getElementById('create-link');
-        const bl = this._shadow.getElementById('back-link');
-        const dl = this._shadow.getElementById('delete-link');
-        if (pw) pw.value = '';
-        if (vni) vni.value = '';
-        if (vsg) vsg.style.display = mode === 'delete' ? 'block' : 'block';
-        if (vng) vng.style.display = mode === 'create' ? 'block' : 'none';
         if (lbl) lbl.textContent = mode === 'delete' ? 'Confirm Password to Delete' : 'Master Password';
+        const btn = this._shadow.getElementById('auth-submit');
         if (btn) btn.textContent = mode === 'create' ? 'Create Vault' : mode === 'delete' ? 'Delete Vault' : 'Unlock Vault';
-        if (cl) cl.style.display = mode === 'unlock' ? 'inline' : 'none';
-        if (bl) bl.style.display = mode !== 'unlock' ? 'inline' : 'none';
-        if (dl) dl.style.display = mode === 'unlock' ? 'inline' : 'none';
+        const cl = this._shadow.getElementById('create-link'); if (cl) cl.style.display = mode === 'unlock' ? 'inline' : 'none';
+        const bl = this._shadow.getElementById('back-link'); if (bl) bl.style.display = mode !== 'unlock' ? 'inline' : 'none';
+        const dl = this._shadow.getElementById('delete-link'); if (dl) dl.style.display = mode === 'unlock' ? 'inline' : 'none';
     }
 
     async _handleAuth() {
@@ -103,7 +91,7 @@ class SovereignApp extends HTMLElement {
         const mode = this._authMode;
         try {
             this._authErr(mode === 'create' ? 'Creating...' : mode === 'delete' ? 'Deleting...' : 'Unlocking...');
-            const { deriveSovereignKey, verifyPassword } = await import('../core/crypto.js');
+            const { deriveKey, createVerifier, verifyPassword, vaultDNA } = await import('../core/crypto.js');
             const { initSovereignDB, getAllVaults, saveVault, deleteVault } = await import('../core/db.js');
             await initSovereignDB();
 
@@ -113,11 +101,11 @@ class SovereignApp extends HTMLElement {
                 const vaults = await getAllVaults();
                 if (vaults.find(v => v.name.toLowerCase() === name.toLowerCase())) return this._authErr('Name already exists');
                 const salt = crypto.getRandomValues(new Uint8Array(16));
-                const key = await deriveSovereignKey(pw, salt);
-                if (!await verifyPassword(key)) return this._authErr('Key derivation failed');
+                const verifier = await createVerifier(pw, salt);
+                this._key = await deriveKey(pw, salt);
                 const id = 'vault_' + crypto.randomUUID();
-                await saveVault(id, name, salt);
-                this._vaultId = id; this._vaultName = name; this._salt = salt; this._key = key;
+                await saveVault(id, name, salt, verifier);
+                this._vaultId = id; this._vaultName = name; this._salt = salt;
             } else if (mode === 'unlock') {
                 const vid = this._shadow.getElementById('vault-select')?.value;
                 if (!vid) return this._authErr('Select a vault');
@@ -125,9 +113,10 @@ class SovereignApp extends HTMLElement {
                 const vault = vaults.find(v => v.id === vid);
                 if (!vault) return this._authErr('Vault not found');
                 const salt = new Uint8Array(vault.salt);
-                const key = await deriveSovereignKey(pw, salt);
-                if (!await verifyPassword(key)) return this._authErr('Wrong password');
-                this._vaultId = vault.id; this._vaultName = vault.name; this._salt = salt; this._key = key;
+                const valid = await verifyPassword(pw, salt, vault.verifier);
+                if (!valid) return this._authErr('Wrong password');
+                this._key = await deriveKey(pw, salt);
+                this._vaultId = vault.id; this._vaultName = vault.name; this._salt = salt;
             } else if (mode === 'delete') {
                 const vid = this._shadow.getElementById('vault-select')?.value;
                 if (!vid) return this._authErr('Select a vault');
@@ -135,14 +124,19 @@ class SovereignApp extends HTMLElement {
                 const vault = vaults.find(v => v.id === vid);
                 if (!vault) return this._authErr('Vault not found');
                 const salt = new Uint8Array(vault.salt);
-                const key = await deriveSovereignKey(pw, salt);
-                if (!await verifyPassword(key)) return this._authErr('Wrong password');
+                const valid = await verifyPassword(pw, salt, vault.verifier);
+                if (!valid) return this._authErr('Wrong password');
                 await deleteVault(vid);
-                this._authErr('Vault "' + vault.name + '" deleted');
+                this._authErr('Vault "' + vault.name + '" permanently deleted');
                 await this._loadVaultList();
                 this._setAuthMode('unlock');
                 return;
             }
+
+            // Show vault DNA on auth success
+            const dnaEl = this._shadow.getElementById('vault-dna');
+            if (dnaEl) dnaEl.innerHTML = vaultDNA(this._vaultId);
+
             await this._loadSettings();
             await this._loadItems();
             const authScreen = this._shadow.getElementById('auth-screen');
@@ -172,19 +166,20 @@ class SovereignApp extends HTMLElement {
     async _loadItems() {
         try {
             const { getAllVessels, getSetting } = await import('../core/db.js');
-            const { decryptSovereignBlob } = await import('../core/crypto.js');
+            const { decryptData } = await import('../core/crypto.js');
             const vessels = await getAllVessels();
             this._items = [];
             for (const v of vessels) {
                 try {
-                    const data = await decryptSovereignBlob(this._key, v.blob, v.iv);
+                    const data = await decryptData(this._key, v.blob, v.iv);
                     const parsed = JSON.parse(data);
                     this._items.push({
                         id: v.id, type: v.type || parsed.type || 'unknown',
                         data: parsed.payload || parsed,
                         tags: Array.isArray(parsed.tags) ? parsed.tags : [],
                         priority: parsed.priority || v.priority || 'medium',
-                        color: parsed.color || 'none', isFlagged: false,
+                        color: parsed.color || 'none',
+                        isFlagged: parsed.isFlagged || false,
                         timestamp: v.timestamp, updatedAt: v.updatedAt
                     });
                 } catch (err) { this._log('warn', 'Decrypt failed for', v.id, err); }
@@ -195,13 +190,13 @@ class SovereignApp extends HTMLElement {
     }
 
     /* ── CRUD ── */
-    async _seal(type, payload, tags = [], priority = 'medium') {
+    async _seal(type, payload, tags = [], priority = 'medium', color = 'none', isFlagged = false) {
         try {
-            const { createHollowVessel } = await import('../core/crypto.js');
+            const { createVessel } = await import('../core/crypto.js');
             const { saveVessel } = await import('../core/db.js');
-            const vessel = await createHollowVessel(this._key, type, payload, tags, priority);
+            const vessel = await createVessel(this._key, type, payload, tags, priority, color);
             const id = `${type}_${crypto.randomUUID()}`;
-            await saveVessel(id, vessel.ciphertext, vessel.iv, type, tags, priority);
+            await saveVessel(id, vessel.ciphertext, vessel.iv, type, tags, priority, color, isFlagged);
             await this._loadItems();
             this._nav(this._tab);
         } catch (err) { this._log('error', 'Seal failed:', err); }
@@ -216,14 +211,14 @@ class SovereignApp extends HTMLElement {
         } catch (err) { this._log('error', 'Delete failed:', err); }
     }
 
-    async _update(id, payload, tags, priority) {
+    async _update(id, payload, tags, priority, color, isFlagged) {
         try {
-            const { createHollowVessel } = await import('../core/crypto.js');
+            const { createVessel } = await import('../core/crypto.js');
             const { updateVessel } = await import('../core/db.js');
             const item = this._items.find(i => i.id === id);
             if (!item) return;
-            const vessel = await createHollowVessel(this._key, item.type, payload, tags, priority);
-            await updateVessel(id, vessel.ciphertext, vessel.iv, item.type, tags, priority, item.color, item.isFlagged);
+            const vessel = await createVessel(this._key, item.type, payload, tags, priority, color);
+            await updateVessel(id, vessel.ciphertext, vessel.iv, item.type, tags, priority, color, isFlagged);
             await this._loadItems();
             this._nav(this._tab);
         } catch (err) { this._log('error', 'Update failed:', err); }
@@ -259,7 +254,7 @@ class SovereignApp extends HTMLElement {
         list.innerHTML = tasks.map(t => {
             const due = t.data.dueDate ? new Date(t.data.dueDate).toLocaleDateString() : '';
             const od = !t.data.completed && t.data.dueDate && new Date(t.data.dueDate) < new Date();
-            return `<div class="ic"><button class="chk ${t.data.completed ? 'on' : ''}" data-id="${t.id}">${t.data.completed ? '✓' : ''}</button><div class="ib"><div class="it ${t.data.completed ? 'done' : ''}" data-edit="${t.id}">${this._esc(t.data.title || 'Untitled')}</div><div class="im"><span class="pb p-${t.priority}">${t.priority}</span>${due ? `<span style="color:${od ? 'var(--danger)' : 'var(--t2)'}">${od ? '⚠ ' : ''}${due}</span>` : ''}${(t.tags || []).map(g => `<span class="tg">${this._esc(g)}</span>`).join('')}</div></div><button class="ab" data-edit="${t.id}">✎</button><button class="ab del" data-del="${t.id}">✕</button></div>`;
+            return `<div class="ic ${t.isFlagged ? 'flagged' : ''}"><button class="chk ${t.data.completed ? 'on' : ''}" data-id="${t.id}">${t.data.completed ? '✓' : ''}</button><div class="ib"><div class="it ${t.data.completed ? 'done' : ''}" data-edit="${t.id}">${t.isFlagged ? '🚩 ' : ''}${this._esc(t.data.title || 'Untitled')}</div><div class="im"><span class="pb p-${t.priority}">${t.priority}</span>${due ? `<span style="color:${od ? 'var(--danger)' : 'var(--t2)'}">${od ? '⚠ ' : ''}${due}</span>` : ''}${(t.tags || []).map(g => `<span class="tg">${this._esc(g)}</span>`).join('')}</div></div><button class="ab" data-edit="${t.id}">✎</button><button class="ab del" data-del="${t.id}">✕</button></div>`;
         }).join('');
     }
 
@@ -269,7 +264,7 @@ class SovereignApp extends HTMLElement {
         const list = this._shadow.getElementById('note-list');
         if (!list) return;
         if (!notes.length) { list.innerHTML = '<div class="empty"><div class="ei">📝</div><div>No notes yet</div></div>'; return; }
-        list.innerHTML = notes.map(n => `<div class="ic"><div class="ib"><div class="it">${this._esc(n.data.title || 'Untitled')}</div><div class="im"><span>${this._esc((n.data.content || '').substring(0, 120))}${(n.data.content || '').length > 120 ? '...' : ''}</span>${(n.tags || []).map(g => `<span class="tg">${this._esc(g)}</span>`).join('')}<span>${new Date(n.timestamp).toLocaleDateString()}</span></div></div><button class="ab del" data-del="${n.id}">✕</button></div>`).join('');
+        list.innerHTML = notes.map(n => `<div class="ic ${n.isFlagged ? 'flagged' : ''}"><div class="ib"><div class="it" data-edit="${n.id}">${n.isFlagged ? '🚩 ' : ''}${this._esc(n.data.title || 'Untitled')}</div><div class="im"><span>${this._esc((n.data.content || '').substring(0, 120))}${(n.data.content || '').length > 120 ? '...' : ''}</span>${(n.tags || []).map(g => `<span class="tg">${this._esc(g)}</span>`).join('')}<span>${new Date(n.timestamp).toLocaleDateString()}</span></div></div><button class="ab" data-edit="${n.id}">✎</button><button class="ab del" data-del="${n.id}">✕</button></div>`).join('');
     }
 
     /* ── Render: Habits ── */
@@ -284,7 +279,7 @@ class SovereignApp extends HTMLElement {
             const checked = ci.includes(today);
             let streak = 0; const d = new Date();
             while (ci.includes(d.toDateString())) { streak++; d.setDate(d.getDate() - 1); }
-            return `<div class="hc"><div class="hh"><div><div class="ht">${this._esc(h.data.title || 'Untitled')}</div><div class="hs">🔥 ${streak} day streak</div></div><button class="hcb ${checked ? 'on' : ''}" data-hid="${h.id}">✓</button></div><div class="im"><span class="pb p-${h.priority}">${h.priority}</span><span style="font-size:0.65rem;color:var(--t2)">${ci.length} check-ins</span></div><button class="ab del" data-del="${h.id}" style="margin-top:0.5rem">Delete</button></div>`;
+            return `<div class="hc ${h.isFlagged ? 'flagged' : ''}"><div class="hh"><div><div class="ht">${h.isFlagged ? '🚩 ' : ''}${this._esc(h.data.title || 'Untitled')}</div><div class="hs">🔥 ${streak} day streak</div></div><button class="hcb ${checked ? 'on' : ''}" data-hid="${h.id}">✓</button></div><div class="im"><span class="pb p-${h.priority}">${h.priority}</span><span style="font-size:0.65rem;color:var(--t2)">${ci.length} check-ins</span></div><button class="ab" data-edit="${h.id}">✎</button><button class="ab del" data-del="${h.id}" style="margin-left:0.25rem">✕</button></div>`;
         }).join('') + `</div>`;
     }
 
@@ -319,6 +314,8 @@ class SovereignApp extends HTMLElement {
         const title = this._shadow.getElementById('cal-title');
         if (!view || !title) return;
         const all = this._items;
+        const filtered = this._calFilter === 'all' ? all : all.filter(i => i.type === this._calFilter);
+
         if (this._calView === 'month') {
             const y = this._calDate.getFullYear(), m = this._calDate.getMonth();
             title.textContent = new Date(y, m).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -331,21 +328,12 @@ class SovereignApp extends HTMLElement {
                 const d = new Date(start); d.setDate(d.getDate() + i);
                 const other = d.getMonth() !== m, isToday = d.toDateString() === today.toDateString();
                 const ds = d.toDateString();
-                const di = all.filter(it => new Date(it.timestamp).toDateString() === ds);
-                h += `<div class="cd ${other ? 'om' : ''} ${isToday ? 'td' : ''}"><div class="cdn">${d.getDate()}</div>${di.slice(0, 2).map(it => { const t = it.data?.title || it.data?.desc || it.data?.content?.substring(0, 18) || it.type; return `<div class="ci ${it.type}">${this._esc(t)}</div>`; }).join('')}${di.length > 2 ? `<div class="cm">+${di.length - 2}</div>` : ''}</div>`;
+                const di = filtered.filter(it => new Date(it.timestamp).toDateString() === ds);
+                h += `<div class="cd ${other ? 'om' : ''} ${isToday ? 'td' : ''}"><div class="cdn">${d.getDate()}</div>${di.slice(0, 3).map(it => { const t = it.data?.title || it.data?.desc || it.data?.content?.substring(0, 15) || it.type; return `<div class="ci ${it.type}">${this._esc(t)}</div>`; }).join('')}${di.length > 3 ? `<div class="cm">+${di.length - 3}</div>` : ''}</div>`;
                 if (d > ld && i >= 34) break;
             }
             h += '</div>'; view.innerHTML = h;
-        } else if (this._calView === 'day') {
-            title.textContent = this._calDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-            const di = all.filter(it => new Date(it.timestamp).toDateString() === this._calDate.toDateString());
-            let h = '';
-            for (let hr = 0; hr < 24; hr++) {
-                const hi = di.filter(it => new Date(it.timestamp).getHours() === hr);
-                h += `<div class="dh"><div class="dhl">${hr.toString().padStart(2, '0')}:00</div><div class="dhc">${hi.map(it => { const t = it.data?.title || it.data?.desc || it.data?.content?.substring(0, 25) || it.type; return `<div class="ci ${it.type}" style="margin-bottom:0.25rem">${this._esc(t)}</div>`; }).join('')}</div></div>`;
-            }
-            view.innerHTML = h;
-        } else {
+        } else if (this._calView === 'week') {
             const sow = new Date(this._calDate); sow.setDate(sow.getDate() - sow.getDay());
             const eow = new Date(sow); eow.setDate(eow.getDate() + 6);
             title.textContent = `${sow.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${eow.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
@@ -355,9 +343,44 @@ class SovereignApp extends HTMLElement {
                 const d = new Date(sow); d.setDate(d.getDate() + i);
                 const isToday = d.toDateString() === new Date().toDateString();
                 const ds = d.toDateString();
-                const di = all.filter(it => new Date(it.timestamp).toDateString() === ds);
-                h += `<div class="cd ${isToday ? 'td' : ''}" style="min-height:100px"><div class="cdn">${d.getDate()}</div>${di.slice(0, 3).map(it => { const t = it.data?.title || it.data?.desc || it.data?.content?.substring(0, 18) || it.type; return `<div class="ci ${it.type}">${this._esc(t)}</div>`; }).join('')}${di.length > 3 ? `<div class="cm">+${di.length - 3}</div>` : ''}</div>`;
+                const di = filtered.filter(it => new Date(it.timestamp).toDateString() === ds);
+                h += `<div class="cd ${isToday ? 'td' : ''}" style="min-height:100px"><div class="cdn">${d.getDate()}</div>${di.slice(0, 4).map(it => { const t = it.data?.title || it.data?.desc || it.data?.content?.substring(0, 15) || it.type; return `<div class="ci ${it.type}">${this._esc(t)}</div>`; }).join('')}${di.length > 4 ? `<div class="cm">+${di.length - 4}</div>` : ''}</div>`;
             }
+            h += '</div>'; view.innerHTML = h;
+        } else if (this._calView === 'workweek') {
+            const sow = new Date(this._calDate);
+            const day = sow.getDay();
+            sow.setDate(sow.getDate() - day + (day === 0 ? -6 : 1)); // Monday
+            const eow = new Date(sow); eow.setDate(eow.getDate() + 4);
+            title.textContent = `${sow.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${eow.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+            let h = '<div class="cg">';
+            ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].forEach(d => h += `<div class="ch">${d}</div>`);
+            for (let i = 0; i < 5; i++) {
+                const d = new Date(sow); d.setDate(d.getDate() + i);
+                const isToday = d.toDateString() === new Date().toDateString();
+                const ds = d.toDateString();
+                const di = filtered.filter(it => new Date(it.timestamp).toDateString() === ds);
+                h += `<div class="cd ${isToday ? 'td' : ''}" style="min-height:100px"><div class="cdn">${d.getDate()}</div>${di.slice(0, 4).map(it => { const t = it.data?.title || it.data?.desc || it.data?.content?.substring(0, 15) || it.type; return `<div class="ci ${it.type}">${this._esc(t)}</div>`; }).join('')}${di.length > 4 ? `<div class="cm">+${di.length - 4}</div>` : ''}</div>`;
+            }
+            h += '</div>'; view.innerHTML = h;
+        } else if (this._calView === 'day') {
+            title.textContent = this._calDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+            const di = filtered.filter(it => new Date(it.timestamp).toDateString() === this._calDate.toDateString());
+            let h = '';
+            for (let hr = 0; hr < 24; hr++) {
+                const hi = di.filter(it => new Date(it.timestamp).getHours() === hr);
+                h += `<div class="dh"><div class="dhl">${hr.toString().padStart(2, '0')}:00</div><div class="dhc">${hi.map(it => { const t = it.data?.title || it.data?.desc || it.data?.content?.substring(0, 30) || it.type; return `<div class="ci ${it.type}" style="margin-bottom:0.25rem">${this._esc(t)}</div>`; }).join('')}</div></div>`;
+            }
+            view.innerHTML = h;
+        } else if (this._calView === 'schedule') {
+            title.textContent = 'Schedule View';
+            const sorted = [...filtered].sort((a, b) => b.timestamp - a.timestamp);
+            let h = '<div style="display:flex;flex-direction:column;gap:0.375rem">';
+            if (!sorted.length) h += '<div class="empty"><div class="ei">📅</div><div>No items</div></div>';
+            sorted.forEach(it => {
+                const t = it.data?.title || it.data?.desc || it.data?.content?.substring(0, 40) || it.type;
+                h += `<div class="ic"><div class="ib"><div class="it">${this._esc(t)}</div><div class="im"><span class="tg" style="background:var(--${it.type === 'task' ? 'primary' : it.type === 'note' ? 'info' : it.type === 'habit' ? 'warn' : 'purple'}20);color:var(--${it.type === 'task' ? 'primary' : it.type === 'note' ? 'info' : it.type === 'habit' ? 'warn' : 'purple'})">${it.type}</span><span>${new Date(it.timestamp).toLocaleString()}</span></div></div></div>`;
+            });
             h += '</div>'; view.innerHTML = h;
         }
     }
@@ -385,8 +408,6 @@ class SovereignApp extends HTMLElement {
         if (tsp > 0 && ls.wp > 40) insights.push({ t: 'w', m: `High discretionary spending: ${ls.wp}% of expenses are "wants".` });
         const ov = tasks.filter(t => !t.data.completed && t.data.dueDate && new Date(t.data.dueDate) < new Date()).length;
         if (ov > 3) insights.push({ t: 'd', m: `${ov} overdue tasks. Consider breaking them down.` });
-        const lsh = habits.filter(h => { const ci = this._habits[h.id] || []; let s = 0; const d = new Date(); while (ci.includes(d.toDateString())) { s++; d.setDate(d.getDate() - 1); } return s < 3; }).length;
-        if (habits.length > 0 && lsh / habits.length > 0.6) insights.push({ t: 'i', m: `${lsh}/${habits.length} habits have streaks < 3 days.` });
         if (!insights.length) insights.push({ t: 'i', m: 'All systems optimal.' });
         const ic = { w: 'var(--warn)', d: 'var(--danger)', i: 'var(--info)' };
         this._shadow.getElementById('insights').innerHTML = insights.map(i => `<div style="padding:0.625rem 0;border-bottom:1px solid var(--bdr);font-size:0.8rem"><span style="color:${ic[i.t]};font-weight:600">● </span>${i.m}</div>`).join('');
@@ -440,28 +461,77 @@ class SovereignApp extends HTMLElement {
         } catch (err) { this._log('error', 'Chat failed:', err); this._addChat('bot', 'Error processing command.'); }
     }
 
-    /* ── Edit Item ── */
-    async _editItem(id) {
+    /* ── Edit Modal ── */
+    _openEditModal(id) {
         const item = this._items.find(i => i.id === id);
         if (!item) return;
-        const titleEl = this._shadow.querySelector(`[data-edit="${id}"]`);
-        if (!titleEl) return;
-        const current = item.data.title || item.data.desc || item.data.content || '';
-        const input = document.createElement('input');
-        input.type = 'text'; input.className = 'fi'; input.value = current;
-        input.style.cssText = 'font-size:0.8rem;padding:0.375rem 0.5rem;';
-        titleEl.replaceWith(input); input.focus(); input.select();
-        const save = async () => {
-            const val = input.value.trim();
-            if (val && val !== current) {
-                if (item.data.title !== undefined) item.data.title = val;
-                else if (item.data.desc !== undefined) item.data.desc = val;
-                else if (item.data.content !== undefined) item.data.content = val;
-                await this._update(id, item.data, item.tags, item.priority);
-            } else { this._renderMod(); }
-        };
-        input.onblur = save;
-        input.onkeydown = (e) => { if (e.key === 'Enter') input.blur(); if (e.key === 'Escape') { input.value = current; input.blur(); } };
+        const overlay = this._shadow.getElementById('edit-modal-overlay');
+        if (!overlay) return;
+        overlay.style.display = 'flex';
+        const type = item.type;
+        const d = item.data;
+
+        // Populate modal based on type
+        this._shadow.getElementById('edit-modal-title').textContent = `Edit ${type.charAt(0).toUpperCase() + type.slice(1)}`;
+
+        let html = '';
+        if (type === 'task') {
+            html = `
+                <div class="emg"><label class="eml">Title</label><input type="text" id="edit-title" class="fi" value="${this._esc(d.title || '')}"></div>
+                <div class="emg"><label class="eml">Content</label><textarea id="edit-content" class="ft" rows="4">${this._esc(d.content || '')}</textarea></div>
+                <div class="emr"><div class="emg"><label class="eml">Priority</label><select id="edit-priority" class="fs"><option value="low" ${d.priority === 'low' ? 'selected' : ''}>Low</option><option value="medium" ${d.priority === 'medium' ? 'selected' : ''}>Medium</option><option value="high" ${d.priority === 'high' ? 'selected' : ''}>High</option><option value="critical" ${d.priority === 'critical' ? 'selected' : ''}>Critical</option></select></div>
+                <div class="emg"><label class="eml">Due Date</label><input type="datetime-local" id="edit-due" class="fi" value="${d.dueDate || ''}"></div></div>
+                <div class="emr"><div class="emg"><label class="eml">Color</label><select id="edit-color" class="fs"><option value="none" ${d.color === 'none' ? 'selected' : ''}>None</option><option value="red" ${d.color === 'red' ? 'selected' : ''}>Red</option><option value="orange" ${d.color === 'orange' ? 'selected' : ''}>Orange</option><option value="yellow" ${d.color === 'yellow' ? 'selected' : ''}>Yellow</option><option value="green" ${d.color === 'green' ? 'selected' : ''}>Green</option><option value="blue" ${d.color === 'blue' ? 'selected' : ''}>Blue</option><option value="purple" ${d.color === 'purple' ? 'selected' : ''}>Purple</option></select></div>
+                <div class="emg"><label class="eml">Tags (comma sep)</label><input type="text" id="edit-tags" class="fi" value="${(item.tags || []).join(', ')}"></div></div>
+                <div class="emg" style="display:flex;align-items:center;gap:0.5rem"><input type="checkbox" id="edit-flagged" ${item.isFlagged ? 'checked' : ''}><label for="edit-flagged" style="font-size:0.8rem">Flagged</label></div>`;
+        } else if (type === 'note') {
+            html = `
+                <div class="emg"><label class="eml">Title</label><input type="text" id="edit-title" class="fi" value="${this._esc(d.title || '')}"></div>
+                <div class="emg"><label class="eml">Content</label><textarea id="edit-content" class="ft" rows="8">${this._esc(d.content || '')}</textarea></div>
+                <div class="emr"><div class="emg"><label class="eml">Priority</label><select id="edit-priority" class="fs"><option value="low" ${d.priority === 'low' ? 'selected' : ''}>Low</option><option value="medium" ${d.priority === 'medium' ? 'selected' : ''}>Medium</option><option value="high" ${d.priority === 'high' ? 'selected' : ''}>High</option></select></div>
+                <div class="emg"><label class="eml">Color</label><select id="edit-color" class="fs"><option value="none" ${d.color === 'none' ? 'selected' : ''}>None</option><option value="red" ${d.color === 'red' ? 'selected' : ''}>Red</option><option value="blue" ${d.color === 'blue' ? 'selected' : ''}>Blue</option><option value="purple" ${d.color === 'purple' ? 'selected' : ''}>Purple</option></select></div></div>
+                <div class="emg"><label class="eml">Tags (comma sep)</label><input type="text" id="edit-tags" class="fi" value="${(item.tags || []).join(', ')}"></div>
+                <div class="emg" style="display:flex;align-items:center;gap:0.5rem"><input type="checkbox" id="edit-flagged" ${item.isFlagged ? 'checked' : ''}><label for="edit-flagged" style="font-size:0.8rem">Flagged</label></div>`;
+        } else if (type === 'habit') {
+            html = `
+                <div class="emg"><label class="eml">Title</label><input type="text" id="edit-title" class="fi" value="${this._esc(d.title || '')}"></div>
+                <div class="emr"><div class="emg"><label class="eml">Priority</label><select id="edit-priority" class="fs"><option value="low" ${d.priority === 'low' ? 'selected' : ''}>Low</option><option value="medium" ${d.priority === 'medium' ? 'selected' : ''}>Medium</option><option value="high" ${d.priority === 'high' ? 'selected' : ''}>High</option></select></div>
+                <div class="emg"><label class="eml">Color</label><select id="edit-color" class="fs"><option value="none" ${d.color === 'none' ? 'selected' : ''}>None</option><option value="orange" ${d.color === 'orange' ? 'selected' : ''}>Orange</option><option value="green" ${d.color === 'green' ? 'selected' : ''}>Green</option></select></div></div>
+                <div class="emg"><label class="eml">Tags (comma sep)</label><input type="text" id="edit-tags" class="fi" value="${(item.tags || []).join(', ')}"></div>
+                <div class="emg" style="display:flex;align-items:center;gap:0.5rem"><input type="checkbox" id="edit-flagged" ${item.isFlagged ? 'checked' : ''}><label for="edit-flagged" style="font-size:0.8rem">Flagged</label></div>`;
+        }
+        this._shadow.getElementById('edit-modal-body').innerHTML = html;
+        this._shadow.getElementById('edit-modal-save').onclick = () => this._saveEdit(id);
+        this._shadow.getElementById('edit-modal-cancel').onclick = () => this._closeEditModal();
+    }
+
+    async _saveEdit(id) {
+        const item = this._items.find(i => i.id === id);
+        if (!item) return;
+        const titleEl = this._shadow.getElementById('edit-title');
+        const contentEl = this._shadow.getElementById('edit-content');
+        const priorityEl = this._shadow.getElementById('edit-priority');
+        const dueEl = this._shadow.getElementById('edit-due');
+        const colorEl = this._shadow.getElementById('edit-color');
+        const tagsEl = this._shadow.getElementById('edit-tags');
+        const flaggedEl = this._shadow.getElementById('edit-flagged');
+
+        const payload = { ...item.data };
+        if (titleEl) payload.title = titleEl.value.trim() || payload.title;
+        if (contentEl) payload.content = contentEl.value.trim();
+        if (dueEl) payload.dueDate = dueEl.value || null;
+        const tags = tagsEl ? tagsEl.value.split(',').map(x => x.trim()).filter(Boolean) : item.tags;
+        const priority = priorityEl ? priorityEl.value : item.priority;
+        const color = colorEl ? colorEl.value : item.color;
+        const isFlagged = flaggedEl ? flaggedEl.checked : item.isFlagged;
+
+        await this._update(id, payload, tags, priority, color, isFlagged);
+        this._closeEditModal();
+    }
+
+    _closeEditModal() {
+        const overlay = this._shadow.getElementById('edit-modal-overlay');
+        if (overlay) overlay.style.display = 'none';
     }
 
     /* ── Export/Import ── */
@@ -474,13 +544,13 @@ class SovereignApp extends HTMLElement {
     }
 
     _exportJSON() {
-        const data = this._items.map(i => ({ id: i.id, type: i.type, data: i.data, tags: i.tags, priority: i.priority, timestamp: i.timestamp }));
+        const data = this._items.map(i => ({ id: i.id, type: i.type, data: i.data, tags: i.tags, priority: i.priority, color: i.color, isFlagged: i.isFlagged, timestamp: i.timestamp }));
         this._download(JSON.stringify(data, null, 2), `vault-${Date.now()}.json`, 'application/json');
     }
 
     _exportCSV() {
-        const h = ['Type', 'Timestamp', 'Priority', 'Tags', 'Payload'];
-        const r = this._items.map(i => [i.type, new Date(i.timestamp).toISOString(), i.priority, (i.tags || []).join(';'), JSON.stringify(i.data).replace(/"/g, '""')]);
+        const h = ['Type', 'Timestamp', 'Priority', 'Color', 'Flagged', 'Tags', 'Payload'];
+        const r = this._items.map(i => [i.type, new Date(i.timestamp).toISOString(), i.priority, i.color, i.isFlagged, (i.tags || []).join(';'), JSON.stringify(i.data).replace(/"/g, '""')]);
         this._download([h, ...r].map(x => x.map(c => `"${c}"`).join(',')).join('\n'), `vault-${Date.now()}.csv`, 'text/csv');
     }
 
@@ -491,14 +561,14 @@ class SovereignApp extends HTMLElement {
 
     async _importJSON(file) {
         try {
-            const { createHollowVessel } = await import('../core/crypto.js');
+            const { createVessel } = await import('../core/crypto.js');
             const { saveVessel } = await import('../core/db.js');
             const data = JSON.parse(await file.text());
             const items = Array.isArray(data) ? data : [data];
             let c = 0;
             for (const it of items) {
-                const v = await createHollowVessel(this._key, it.type || 'note', it.data || it.payload || {}, it.tags || [], it.priority || 'medium');
-                await saveVessel(it.id || `${it.type || 'note'}_${crypto.randomUUID()}`, v.ciphertext, v.iv, it.type || 'note', it.tags || [], it.priority || 'medium');
+                const v = await createVessel(this._key, it.type || 'note', it.data || it.payload || {}, it.tags || [], it.priority || 'medium', it.color || 'none');
+                await saveVessel(it.id || `${it.type || 'note'}_${crypto.randomUUID()}`, v.ciphertext, v.iv, it.type || 'note', it.tags || [], it.priority || 'medium', it.color || 'none', it.isFlagged || false);
                 c++;
             }
             await this._loadItems(); this._nav(this._tab);
@@ -507,7 +577,7 @@ class SovereignApp extends HTMLElement {
 
     async _importCSV(file) {
         try {
-            const { createHollowVessel } = await import('../core/crypto.js');
+            const { createVessel } = await import('../core/crypto.js');
             const { saveVessel } = await import('../core/db.js');
             const lines = (await file.text()).split('\n').filter(l => l.trim());
             if (lines.length < 2) return;
@@ -520,8 +590,8 @@ class SovereignApp extends HTMLElement {
                 let payload = {};
                 try { Object.assign(payload, JSON.parse(row.payload || '{}')); } catch (e) { this._log('warn', 'CSV payload parse failed:', e); }
                 const tags = row.tags ? row.tags.split(';').filter(Boolean) : [];
-                const v = await createHollowVessel(this._key, type, payload, tags, row.priority || 'medium');
-                await saveVessel(`${type}_${crypto.randomUUID()}`, v.ciphertext, v.iv, type, tags, row.priority || 'medium');
+                const v = await createVessel(this._key, type, payload, tags, row.priority || 'medium', row.color || 'none');
+                await saveVessel(`${type}_${crypto.randomUUID()}`, v.ciphertext, v.iv, type, tags, row.priority || 'medium', row.color || 'none', row.flagged === 'true');
                 c++;
             }
             await this._loadItems(); this._nav(this._tab);
@@ -530,7 +600,7 @@ class SovereignApp extends HTMLElement {
 
     async _importICS(file) {
         try {
-            const { createHollowVessel } = await import('../core/crypto.js');
+            const { createVessel } = await import('../core/crypto.js');
             const { saveVessel } = await import('../core/db.js');
             const text = await file.text();
             const events = text.split('BEGIN:VEVENT').slice(1);
@@ -540,7 +610,7 @@ class SovereignApp extends HTMLElement {
                 const desc = ev.match(/DESCRIPTION:(.*)/)?.[1]?.trim() || '';
                 const dt = ev.match(/DTSTART[:;]?(.*)/)?.[1]?.trim();
                 const due = dt ? new Date(dt.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/, '$1-$2-$3T$4:$5:$6')).toISOString() : null;
-                const v = await createHollowVessel(this._key, 'task', { title: summary, content: desc, dueDate: due, completed: false, createdAt: Date.now() }, ['imported-ics']);
+                const v = await createVessel(this._key, 'task', { title: summary, content: desc, dueDate: due, completed: false, createdAt: Date.now() }, ['imported-ics']);
                 await saveVessel(`task_${crypto.randomUUID()}`, v.ciphertext, v.iv, 'task', ['imported-ics']);
                 c++;
             }
@@ -557,7 +627,7 @@ class SovereignApp extends HTMLElement {
 
     async _importLedgerCSV(file) {
         try {
-            const { createHollowVessel } = await import('../core/crypto.js');
+            const { createVessel } = await import('../core/crypto.js');
             const { saveVessel } = await import('../core/db.js');
             const lines = (await file.text()).split('\n').filter(l => l.trim());
             if (lines.length < 2) return;
@@ -568,7 +638,7 @@ class SovereignApp extends HTMLElement {
                 const row = {}; headers.forEach((h, idx) => row[h] = vals[idx] || '');
                 const amt = parseFloat(row.amount) || 0;
                 const type = row.type === 'credit' ? 'credit' : 'debit';
-                const v = await createHollowVessel(this._key, 'ledger', { desc: row.description || row.desc || '', amount: type === 'debit' ? -Math.abs(amt) : Math.abs(amt), type, category: row.category || 'general', classification: row.classification || 'need', notes: row.notes || '', createdAt: Date.now() });
+                const v = await createVessel(this._key, 'ledger', { desc: row.description || row.desc || '', amount: type === 'debit' ? -Math.abs(amt) : Math.abs(amt), type, category: row.category || 'general', classification: row.classification || 'need', notes: row.notes || '', createdAt: Date.now() });
                 await saveVessel(`ledger_${crypto.randomUUID()}`, v.ciphertext, v.iv, 'ledger');
                 c++;
             }
@@ -649,14 +719,14 @@ class SovereignApp extends HTMLElement {
         const calPrev = this._shadow.getElementById('cal-prev');
         if (calPrev) calPrev.onclick = () => {
             if (this._calView === 'month') this._calDate.setMonth(this._calDate.getMonth() - 1);
-            else if (this._calView === 'week') this._calDate.setDate(this._calDate.getDate() - 7);
+            else if (this._calView === 'week' || this._calView === 'workweek') this._calDate.setDate(this._calDate.getDate() - 7);
             else this._calDate.setDate(this._calDate.getDate() - 1);
             this._renderCalendar();
         };
         const calNext = this._shadow.getElementById('cal-next');
         if (calNext) calNext.onclick = () => {
             if (this._calView === 'month') this._calDate.setMonth(this._calDate.getMonth() + 1);
-            else if (this._calView === 'week') this._calDate.setDate(this._calDate.getDate() + 7);
+            else if (this._calView === 'week' || this._calView === 'workweek') this._calDate.setDate(this._calDate.getDate() + 7);
             else this._calDate.setDate(this._calDate.getDate() + 1);
             this._renderCalendar();
         };
@@ -668,6 +738,8 @@ class SovereignApp extends HTMLElement {
             b.classList.add('active');
             this._renderCalendar();
         });
+        const calFilter = this._shadow.getElementById('cal-filter');
+        if (calFilter) calFilter.onchange = () => { this._calFilter = calFilter.value; this._renderCalendar(); };
 
         // Chat
         const chatSend = this._shadow.getElementById('chat-send');
@@ -751,16 +823,16 @@ class SovereignApp extends HTMLElement {
             try { const { setSetting } = await import('../core/db.js'); await setSetting('autoArchive', this.classList.contains('on')); } catch (err) { this._log('error', 'Save setting failed:', err); }
         };
 
-        // Delegated: task toggle, edit, delete, habit check
+        // Delegated: task toggle, edit, delete, habit check, modal close
         this._shadow.addEventListener('click', async e => {
             const chk = e.target.closest('.chk');
             if (chk) {
                 const item = this._items.find(i => i.id === chk.dataset.id);
-                if (item) { item.data.completed = !item.data.completed; await this._update(item.id, item.data, item.tags, item.priority); }
+                if (item) { item.data.completed = !item.data.completed; await this._update(item.id, item.data, item.tags, item.priority, item.color, item.isFlagged); }
                 return;
             }
             const editBtn = e.target.closest('[data-edit]');
-            if (editBtn && !e.target.classList.contains('chk')) { this._editItem(editBtn.dataset.edit); return; }
+            if (editBtn && !e.target.classList.contains('chk')) { this._openEditModal(editBtn.dataset.edit); return; }
             const del = e.target.closest('[data-del]');
             if (del) { this._delete(del.dataset.del); return; }
             const hcb = e.target.closest('.hcb');
@@ -773,6 +845,10 @@ class SovereignApp extends HTMLElement {
                 try { const { setSetting } = await import('../core/db.js'); await setSetting('habitCheckins', this._habits); } catch (err) { this._log('error', 'Save habit failed:', err); }
                 this._renderHabits();
             }
+            const modalCancel = e.target.closest('#edit-modal-cancel');
+            if (modalCancel) { this._closeEditModal(); return; }
+            const modalOverlay = e.target.closest('#edit-modal-overlay');
+            if (modalOverlay && e.target === modalOverlay) { this._closeEditModal(); return; }
         });
     }
 
@@ -781,15 +857,15 @@ class SovereignApp extends HTMLElement {
         this._applyTheme(0);
         this._shadow.innerHTML = `
         <style>
-        :host{display:block;--bg:#0a0a0a;--s1:#141414;--s2:#1e1e1e;--t1:#e5e5e5;--t2:#a3a3a3;--primary:#10b981;--primary-h:#0d9f6e;--danger:#ef4444;--warn:#f59e0b;--info:#3b82f6;--bdr:rgba(255,255,255,0.08);--r:0.625rem;--rl:0.875rem}
+        :host{display:block;--bg:#0a0a0a;--s1:#141414;--s2:#1e1e1e;--t1:#e5e5e5;--t2:#a3a3a3;--primary:#10b981;--primary-h:#0d9f6e;--danger:#ef4444;--warn:#f59e0b;--info:#3b82f6;--purple:#8b5cf6;--bdr:rgba(255,255,255,0.08);--r:0.625rem;--rl:0.875rem}
         *{margin:0;padding:0;box-sizing:border-box}
         :host{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--t1);font-size:13px;line-height:1.5}
         #auth-screen{position:fixed;inset:0;background:linear-gradient(135deg,#0a0a0a,#111827);display:flex;align-items:center;justify-content:center;z-index:10000}
-        .abox{background:var(--s1);border:1px solid var(--bdr);border-radius:1.25rem;padding:2rem;width:360px;max-width:90%;text-align:center}
+        .abox{background:var(--s1);border:1px solid var(--bdr);border-radius:1.25rem;padding:2rem;width:380px;max-width:90%;text-align:center}
         .alogo{font-size:1.25rem;font-weight:800;display:flex;align-items:center;justify-content:center;gap:0.4rem;margin-bottom:0.25rem}
         .adot{width:8px;height:8px;border-radius:50%;background:var(--primary);box-shadow:0 0 10px var(--primary)}
-        .asub{color:var(--primary);font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:1.25rem}
-        .ainp{background:rgba(0,0,0,0.4);border:1px solid #333;padding:0.75rem;border-radius:var(--r);font-size:0.85rem;width:100%;color:var(--t1);margin-bottom:0.75rem;text-align:center}
+        .asub{color:var(--primary);font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:1rem}
+        .ainp{background:rgba(0,0,0,0.4);border:1px solid #333;padding:0.75rem;border-radius:var(--r);font-size:0.85rem;width:100%;color:var(--t1);margin-bottom:0.5rem;text-align:center}
         .ainp:focus{outline:none;border-color:var(--primary)}
         .abtn{background:var(--primary);color:#000;border:none;padding:0.75rem;border-radius:var(--r);font-size:0.85rem;font-weight:600;cursor:pointer;width:100%}
         .abtn:hover{background:var(--primary-h)}
@@ -849,6 +925,7 @@ class SovereignApp extends HTMLElement {
         .il{display:flex;flex-direction:column;gap:0.375rem}
         .ic{background:var(--s1);border:1px solid var(--bdr);border-radius:var(--r);padding:0.625rem 0.75rem;display:flex;align-items:flex-start;gap:0.5rem}
         .ic:hover{border-color:rgba(255,255,255,0.15)}
+        .ic.flagged{border-left:3px solid var(--warn)}
         .chk{width:16px;height:16px;border-radius:50%;border:2px solid var(--bdr);cursor:pointer;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;background:none;color:transparent;font-size:0.55rem}
         .chk.on{background:var(--primary);border-color:var(--primary);color:#000}
         .ib{flex:1;min-width:0}
@@ -873,6 +950,7 @@ class SovereignApp extends HTMLElement {
         .cv{display:flex;gap:0.125rem}
         .cv-btn{padding:0.25rem 0.5rem;border-radius:var(--r);font-size:0.65rem;cursor:pointer;border:1px solid var(--bdr);background:none;color:var(--t2)}
         .cv-btn.active{background:var(--primary);color:#000;border-color:var(--primary)}
+        .cf{padding:0.25rem 0.5rem;border-radius:var(--r);font-size:0.65rem;cursor:pointer;border:1px solid var(--bdr);background:none;color:var(--t2);margin-left:0.5rem}
         .cg{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--bdr);border-radius:var(--r);overflow:hidden}
         .ch{background:var(--s2);padding:0.375rem;text-align:center;font-size:0.6rem;font-weight:600;text-transform:uppercase;color:var(--t2)}
         .cd{background:var(--s1);padding:0.25rem;min-height:70px;cursor:pointer}
@@ -899,6 +977,7 @@ class SovereignApp extends HTMLElement {
         .prf{height:100%;border-radius:999px}
         .hg{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:0.5rem}
         .hc{background:var(--s1);border:1px solid var(--bdr);border-radius:var(--rl);padding:0.75rem}
+        .hc.flagged{border-left:3px solid var(--warn)}
         .hh{display:flex;align-items:center;justify-content:space-between;margin-bottom:0.375rem}
         .ht{font-size:0.8rem;font-weight:600}
         .hs{font-size:0.7rem;color:var(--warn)}
@@ -925,6 +1004,16 @@ class SovereignApp extends HTMLElement {
         ::-webkit-scrollbar{width:5px}
         ::-webkit-scrollbar-track{background:transparent}
         ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:999px}
+
+        /* Edit Modal */
+        .emo{position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:9999}
+        .emo.show{display:flex}
+        .em{background:var(--s1);border:1px solid var(--bdr);border-radius:var(--rl);padding:1.5rem;width:480px;max-width:90%;max-height:80vh;overflow-y:auto}
+        .emt{font-size:1rem;font-weight:600;margin-bottom:1rem}
+        .emg{margin-bottom:0.75rem}
+        .eml{display:block;font-size:0.7rem;font-weight:500;margin-bottom:0.25rem;color:var(--t2)}
+        .emr{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem}
+        .ema{display:flex;justify-content:flex-end;gap:0.5rem;margin-top:1rem}
         </style>
 
         <!-- Auth -->
@@ -945,6 +1034,7 @@ class SovereignApp extends HTMLElement {
                     <input type="password" id="auth-pw" class="ainp" placeholder="Master Password" autofocus>
                     <button id="auth-submit" class="abtn">Unlock Vault</button>
                 </div>
+                <div id="vault-dna" style="margin-top:0.5rem"></div>
                 <div id="auth-err" class="aerr"></div>
                 <div class="ahint" style="margin-top:1rem">
                     <a href="#" id="create-link">Create new vault</a>
@@ -1029,7 +1119,7 @@ class SovereignApp extends HTMLElement {
                     </div>
                     <!-- Calendar -->
                     <div class="mod" data-mod="calendar">
-                        <div class="chd"><div class="cn"><button class="btn bs" id="cal-prev">◀</button><button class="btn bs" id="cal-today">Today</button><button class="btn bs" id="cal-next">▶</button><span class="ctitle" id="cal-title"></span></div><div class="cv"><button class="cv-btn active" data-cv="month">Month</button><button class="cv-btn" data-cv="week">Week</button><button class="cv-btn" data-cv="day">Day</button></div></div>
+                        <div class="chd"><div class="cn"><button class="btn bs" id="cal-prev">◀</button><button class="btn bs" id="cal-today">Today</button><button class="btn bs" id="cal-next">▶</button><span class="ctitle" id="cal-title"></span></div><div style="display:flex;align-items:center"><div class="cv"><button class="cv-btn active" data-cv="month">Month</button><button class="cv-btn" data-cv="week">Week</button><button class="cv-btn" data-cv="workweek">Work Week</button><button class="cv-btn" data-cv="day">Day</button><button class="cv-btn" data-cv="schedule">Schedule</button></div><select id="cal-filter" class="cf"><option value="all">All</option><option value="task">Tasks</option><option value="note">Notes</option><option value="habit">Habits</option><option value="ledger">Ledger</option></select></div></div>
                         <div id="cal-view"></div>
                     </div>
                     <!-- Analytics -->
@@ -1075,6 +1165,16 @@ class SovereignApp extends HTMLElement {
                 <button class="mtb tab-btn" data-tab="settings"><span class="mti">⚙️</span>Set</button>
             </nav>
         </div>
+
+        <!-- Edit Modal -->
+        <div class="emo" id="edit-modal-overlay">
+            <div class="em">
+                <div class="emt" id="edit-modal-title">Edit</div>
+                <div id="edit-modal-body"></div>
+                <div class="ema"><button class="btn" id="edit-modal-cancel">Cancel</button><button class="btn bp" id="edit-modal-save">Save</button></div>
+            </div>
+        </div>
+
         <input type="file" id="fi-json" accept=".json" style="display:none">
         <input type="file" id="fi-csv" accept=".csv" style="display:none">
         <input type="file" id="fi-ics" accept=".ics" style="display:none">
