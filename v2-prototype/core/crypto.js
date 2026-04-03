@@ -7,6 +7,11 @@
 const PBKDF2_ITERATIONS = 600000;
 const CHALLENGE_MAGIC = "VAULT_OPEN_SESAME";
 
+function log(level, msg, err) {
+    if (level === 'error') console.error('[Crypto]', msg, err || '');
+    else console.log('[Crypto]', msg);
+}
+
 export async function deriveSovereignKey(password, salt) {
     const encoder = new TextEncoder();
     const baseKey = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveKey"]);
@@ -34,8 +39,13 @@ export async function verifyPassword(key) {
         const iv = crypto.getRandomValues(new Uint8Array(12));
         const enc = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoder.encode(CHALLENGE_MAGIC));
         const dec = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, enc);
-        return new TextDecoder().decode(dec) === CHALLENGE_MAGIC;
-    } catch { return false; }
+        const result = new TextDecoder().decode(dec) === CHALLENGE_MAGIC;
+        log('info', `Password verification: ${result ? 'PASS' : 'FAIL'}`);
+        return result;
+    } catch (err) {
+        log('error', 'Password verification failed - key may be invalid', err);
+        return false;
+    }
 }
 
 import { scrubMetadata } from './scrubber.js';
@@ -49,5 +59,6 @@ export async function createHollowVessel(key, type, payload, tags = [], priority
 }
 
 export async function verifyVesselIntegrity(key, ciphertext, iv) {
-    try { await decryptSovereignBlob(key, ciphertext, iv); return true; } catch { return false; }
+    try { await decryptSovereignBlob(key, ciphertext, iv); return true; }
+    catch (err) { log('error', 'Vessel integrity check failed', err); return false; }
 }

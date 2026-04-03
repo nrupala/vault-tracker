@@ -7,6 +7,11 @@ node_modules/
 SOVEREIGN_EVOLUTION.md
 v2-prototype/
 
+# Large binary assets (keep in releases, not git)
+*.wasm
+v2-prototype/core/sqlite3.js
+v2-prototype/core/sqlite3.wasm
+
 # Build outputs
 dist/
 build/

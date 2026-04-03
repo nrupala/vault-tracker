@@ -58,7 +58,7 @@ class SovereignApp extends HTMLElement {
             if (vaults.length > 0 && sel) {
                 sel.innerHTML = `<option value="">-- Create New --</option>` + vaults.map(v => `<option value="${v.id}">${this._esc(v.name)}</option>`).join('');
             }
-        } catch {}
+        } catch (err) { console.warn('[App] Vault list load failed (may be first run):', err.message); }
     }
 
     async _unlock() {
@@ -96,7 +96,7 @@ class SovereignApp extends HTMLElement {
             this._shadow.getElementById('app').style.display = 'flex';
             this._shadow.getElementById('vault-label').textContent = this._vaultName;
             this._nav(this._tab);
-        } catch (e) { this._authErr('Error: ' + e.message); }
+        } catch (e) { console.error('[App] Unlock failed:', e); this._authErr('Error: ' + e.message); }
     }
 
     _authErr(msg) { const el = this._shadow.getElementById('auth-err'); if (el) el.textContent = msg; }
@@ -128,7 +128,7 @@ class SovereignApp extends HTMLElement {
                     color: parsed.color || 'none', isFlagged: false,
                     timestamp: v.timestamp, updatedAt: v.updatedAt
                 });
-            } catch {}
+            } catch (err) { console.warn('[App] Failed to decrypt vessel', v.id, err.message); }
         }
         const hd = await getSetting('habitCheckins');
         if (hd) this._habits = JSON.parse(hd);
@@ -477,7 +477,7 @@ class SovereignApp extends HTMLElement {
                 const vals = lines[i].match(/(".*?"|[^,]+)/g)?.map(v => v.replace(/^"|"$/g, '').trim()) || [];
                 const row = {}; headers.forEach((h, idx) => row[h] = vals[idx] || '');
                 const type = row.type || 'note';
-                let payload = {}; try { Object.assign(payload, JSON.parse(row.payload || '{}')); } catch {}
+                let payload = {}; try { Object.assign(payload, JSON.parse(row.payload || '{}')); } catch (e) { console.warn('[App] CSV payload parse failed:', e.message); }
                 const tags = row.tags ? row.tags.split(';').filter(Boolean) : [];
                 const v = await createHollowVessel(this._key, type, payload, tags, row.priority || 'medium');
                 await saveVessel(`${type}_${crypto.randomUUID()}`, v.ciphertext, v.iv, type, tags, row.priority || 'medium');
