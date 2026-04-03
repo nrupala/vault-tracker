@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sovereign Vault v2.0 — Master Plan</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+        background: #0a0a0a;
+        color: #e5e5e5;
+        line-height: 1.6;
+        padding: 2rem;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    h1 { font-size: 2rem; margin-bottom: 0.5rem; color: #10b981; }
+    h2 { font-size: 1.5rem; margin-top: 2rem; margin-bottom: 1rem; color: #10b981; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem; }
+    h3 { font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.75rem; color: #a3a3a3; }
+    p { margin-bottom: 1rem; color: #a3a3a3; }
+    pre {
+        background: #141414;
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        overflow-x: auto;
+        font-size: 0.8rem;
+        line-height: 1.4;
+        margin: 1rem 0;
+        color: #e5e5e5;
+    }
+    code { font-family: 'SF Mono', 'Fira Code', monospace; }
+    blockquote {
+        border-left: 3px solid #10b981;
+        padding-left: 1rem;
+        margin: 1rem 0;
+        color: #a3a3a3;
+        font-style: italic;
+    }
+    ul, ol { margin-left: 1.5rem; margin-bottom: 1rem; color: #a3a3a3; }
+    li { margin-bottom: 0.25rem; }
+    strong { color: #e5e5e5; }
+    hr { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 2rem 0; }
+    .tag { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 999px; font-size: 0.7rem; background: rgba(16,185,129,0.2); color: #10b981; margin-right: 0.25rem; }
+</style>
+</head>
+<body>
+<div id="content"></div>
+<script>
+fetch('MASTER_PLAN.md')
+    .then(r => r.text())
+    .then(text => {
+        // Simple markdown to HTML conversion
+        let html = text
+            .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+            .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+            .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.+?)\*/g, '<em>$1</em>')
+            .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+            .replace(/^├─ (.+)$/gm, '<li>$1</li>')
+            .replace(/^└─ (.+)$/gm, '<li>$1</li>')
+            .replace(/^- (.+)$/gm, '<li>$1</li>')
+            .replace(/^  ├─ (.+)$/gm, '<li style="margin-left:1rem">$1</li>')
+            .replace(/^  └─ (.+)$/gm, '<li style="margin-left:1rem">$1</li>')
+            .replace(/⬜/g, '⬜')
+            .replace(/✅/g, '✅')
+            .replace(/\n\n/g, '</p><p>')
+            .replace(/\n/g, '<br>');
+        
+        // Wrap code blocks
+        html = html.replace(/<pre>([\s\S]*?)<\/pre>/g, (match, code) => {
+            return '<pre><code>' + code.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</code></pre>';
+        });
+        
+        document.getElementById('content').innerHTML = html;
+    })
+    .catch(err => {
+        document.getElementById('content').innerHTML = '<p style="color:#ef4444">Failed to load MASTER_PLAN.md. Make sure the server is running.</p>';
+    });
+</script>
+</body>
+</html>

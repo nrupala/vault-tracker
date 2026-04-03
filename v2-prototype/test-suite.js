@@ -302,10 +302,17 @@ test('Web Components (Custom Elements)', () => {
     assert(f.includes('customElements.define'), 'Should define custom element');
 });
 
-test('SQLite WASM storage', () => {
+test('OPFS primary storage', () => {
     const f = readFileSync(join(ROOT, 'core/db.js'), 'utf8');
-    assert(f.includes('sqlite3'), 'Should use SQLite');
-    assert(f.includes('OpfsDb'), 'Should use OPFS');
+    assert(f.includes('getDirectory'), 'Should use OPFS getDirectory');
+    assert(f.includes('opfsRoot'), 'Should have OPFS root reference');
+    assert(f.includes('getFileHandle'), 'Should use OPFS file handles');
+});
+
+test('Persistent storage request', () => {
+    const f = readFileSync(join(ROOT, 'core/db.js'), 'utf8');
+    assert(f.includes('navigator.storage.persist'), 'Should request persistent storage');
+    assert(f.includes('requestPersistence'), 'Should have persistence function');
 });
 
 test('IndexedDB fallback exists', () => {
@@ -331,6 +338,34 @@ test('No empty catch blocks in SovereignApp', () => {
     const f = readFileSync(join(ROOT, 'ui/SovereignApp.js'), 'utf8');
     assert(!f.includes('} catch {}'), 'Should not have empty catch blocks');
     assert(f.includes('console.error') || f.includes('console.warn'), 'Should have error logging');
+});
+
+test('Personality engine exists', () => {
+    const f = readFileSync(join(ROOT, 'core/personality.js'), 'utf8');
+    assert(f.includes('PERSONALITIES'), 'Should have PERSONALITIES export');
+    assert(f.includes('zen'), 'Should have Zen personality');
+    assert(f.includes('focus'), 'Should have Focus personality');
+    assert(f.includes('playful'), 'Should have Playful personality');
+    assert(f.includes('professional'), 'Should have Professional personality');
+    assert(f.includes('energy'), 'Should have Energy personality');
+});
+
+test('Companion engine exists', () => {
+    const f = readFileSync(join(ROOT, 'core/companion-engine.js'), 'utf8');
+    assert(f.includes('CompanionEngine'), 'Should have CompanionEngine class');
+    assert(f.includes('greet'), 'Should have greet method');
+    assert(f.includes('remember'), 'Should have remember method');
+    assert(f.includes('logMood'), 'Should have logMood method');
+    assert(f.includes('milestone'), 'Should have milestone tracking');
+});
+
+test('Intelligence engine exists', () => {
+    const f = readFileSync(join(ROOT, 'core/intelligence.js'), 'utf8');
+    assert(f.includes('IntelligenceEngine'), 'Should have IntelligenceEngine class');
+    assert(f.includes('suggest'), 'Should have suggest method');
+    assert(f.includes('suggestAmount'), 'Should have amount suggestion');
+    assert(f.includes('detectAnomaly'), 'Should have anomaly detection');
+    assert(f.includes('quickChips'), 'Should have quick chips');
 });
 
 // ── Results ──
