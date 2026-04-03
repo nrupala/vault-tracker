@@ -264,4 +264,12 @@ export async function importVaultFromBlob(fileBlob) {
     }
 }
 
+export async function deleteVault(id) {
+    await initSovereignDB();
+    try {
+        if (useIDB()) { await idbDelete('vaults', id); }
+        else { db.exec({ sql: 'DELETE FROM vaults WHERE id = ?', bind: [id] }); }
+    } catch (err) { log('error', 'deleteVault failed', err); throw err; }
+}
+
 export function getDBMode() { return dbMode; }
