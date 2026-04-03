@@ -22,6 +22,10 @@ class SovereignApp extends HTMLElement {
         this._ledgerStats = null;
         this._themeIdx = 0;
         this._authMode = 'unlock';
+        this._intelligence = null;
+        this._prompts = [];
+        this._personality = 'focus';
+        this._companion = null;
     }
 
     async connectedCallback() {
@@ -139,6 +143,8 @@ class SovereignApp extends HTMLElement {
 
             await this._loadSettings();
             await this._loadItems();
+            await this._initIntelligence();
+            await this._initCompanion();
             const authScreen = this._shadow.getElementById('auth-screen');
             const appEl = this._shadow.getElementById('app');
             if (authScreen) authScreen.style.display = 'none';
@@ -187,6 +193,57 @@ class SovereignApp extends HTMLElement {
             const hd = await getSetting('habitCheckins');
             if (hd) this._habits = JSON.parse(hd);
         } catch (err) { this._log('error', 'Load items failed:', err); }
+    }
+
+    async _initIntelligence() {
+        try {
+            const { IntelligenceEngine } = await import('../core/intelligence.js');
+            this._intelligence = new IntelligenceEngine();
+            this._intelligence.learn(this._items);
+            this._prompts = this._intelligence.smartPrompts(this._items);
+            this._renderPrompts();
+        } catch (err) { this._log('warn', 'Intelligence init failed:', err); }
+    }
+
+    _renderPrompts() {
+        const container = this._shadow.getElementById('smart-prompts');
+        if (!container || !this._prompts.length) return;
+        container.innerHTML = this._prompts.map(p =>
+            `<div class="prompt ${p.type}"><span>${p.text}</span><button class="prompt-dismiss" onclick="this.parentElement.remove()">✕</button></div>`
+        ).join('');
+    }
+
+    async _initCompanion() {
+        try {
+            const { CompanionEngine } = await import('../core/companion-engine.js');
+            const { PERSONALITIES } = await import('../core/personality.js');
+            this._companion = new CompanionEngine();
+            await this._companion.load();
+
+            // Load saved personality
+            const saved = localStorage.getItem('sovereign-personality');
+            if (saved && PERSONALITIES[saved]) this._personality = saved;
+
+            // Get personality instance
+            const { personality } = await import('../core/personality.js');
+            personality.set(this._personality);
+            this._personalityInstance = personality;
+
+            // Add greeting to companion chat
+            const greeting = this._companion.greet(personality.get(), this._items);
+            if (greeting) {
+                this._addChat('bot', greeting);
+            }
+
+            // Mood check-in
+            const moodPrompt = this._companion.moodCheckIn();
+            if (moodPrompt) {
+                this._addChat('bot', moodPrompt.text);
+            }
+
+            // Apply personality accent color
+            this.style.setProperty('--personality-accent', personality.get().accent);
+        } catch (err) { this._log('warn', 'Companion init failed:', err); }
     }
 
     /* ── CRUD ── */
@@ -443,6 +500,50 @@ class SovereignApp extends HTMLElement {
 
     async _handleChat(text) {
         this._addChat('user', text);
+        const p = this._personalityInstance?.get() || null;
+
+        // Check for mood selection
+        const moodMatch = text.match(/😊|😐|😔|😤|good|okay|not great|stressed|great|fine|tough|frustrating/i);
+        if (moodMatch && this._companion) {
+            const moodMap = { '😊': 'good', '😐': 'okay', '😔': 'sad', '😤': 'stressed', 'good': 'good', 'okay': 'okay', 'ok': 'okay', 'not great': 'sad', 'stressed': 'stressed', 'great': 'good', 'fine': 'okay', 'tough': 'sad', 'frustrating': 'stressed' };
+            const mood = Object.entries(moodMap).find(([k]) => text.toLowerCase().includes(k.toLowerCase()));
+            if (mood) {
+                this._companion.logMood(mood[1], text);
+                const responses = {
+                    good: p?.companion('celebrate') || "That's wonderful! I'm glad you're doing well. 🌟",
+                    okay: "Okay is a perfectly fine place to be. Some days are just steady days.",
+                    sad: "I'm sorry you're feeling down. It's okay to not be okay. I'm here with you. 💚",
+                    stressed: "Take a breath. You don't have to figure it all out right now. Want to talk about what's weighing on you?"
+                };
+                this._addChat('bot', responses[mood[1]] || "Thank you for sharing. I'm here.");
+                return;
+            }
+        }
+
+        // Check for personality change
+        const personalityMatch = text.match(/zen|focus|playful|professional|energy/i);
+        if (personalityMatch && text.toLowerCase().includes('mood') || text.toLowerCase().includes('personality') || text.toLowerCase().includes('tone')) {
+            const { PERSONALITIES, personality } = await import('../core/personality.js');
+            const match = Object.keys(PERSONALITIES).find(k => text.toLowerCase().includes(k));
+            if (match) {
+                this._personality = match;
+                personality.set(match);
+                this._personalityInstance = personality;
+                localStorage.setItem('sovereign-personality', match);
+                this.style.setProperty('--personality-accent', personality.get().accent);
+                this._addChat('bot', personality.greeting());
+                return;
+            }
+        }
+
+        // Check for emotional conversation (not a command)
+        if (this._companion && !text.match(/^(task|note|habit|expense|spent|log|spend|security|audit)/i)) {
+            const response = this._companion.respond(text, this._items, p || {});
+            this._addChat('bot', response);
+            return;
+        }
+
+        // Process as commands
         try {
             const { parseSovereignIntent, performSecurityAudit } = await import('../core/companion.js');
             const commands = text.split(/[\n;]+/).map(s => s.trim()).filter(Boolean);
@@ -450,15 +551,15 @@ class SovereignApp extends HTMLElement {
             for (const cmd of commands) {
                 const { intent, payload } = await parseSovereignIntent(cmd);
                 count++;
-                if (intent === 'CREATE_TASK') { await this._seal('task', { title: payload, completed: false, createdAt: Date.now() }); this._addChat('bot', `Task: "${payload}" ✓`); }
-                else if (intent === 'CREATE_NOTE') { await this._seal('note', { title: 'Note', content: payload, createdAt: Date.now() }); this._addChat('bot', 'Note sealed 📝'); }
-                else if (intent === 'CREATE_HABIT') { await this._seal('habit', { title: payload, createdAt: Date.now() }); this._addChat('bot', `Habit: "${payload}" 🔄`); }
+                if (intent === 'CREATE_TASK') { await this._seal('task', { title: payload, completed: false, createdAt: Date.now() }); this._addChat('bot', p?.companion('success') || `Task: "${payload}" ✓`); }
+                else if (intent === 'CREATE_NOTE') { await this._seal('note', { title: 'Note', content: payload, createdAt: Date.now() }); this._addChat('bot', p?.companion('success') || 'Note sealed 📝'); }
+                else if (intent === 'CREATE_HABIT') { await this._seal('habit', { title: payload, createdAt: Date.now() }); this._addChat('bot', p?.companion('success') || `Habit: "${payload}" 🔄`); }
                 else if (intent === 'LOG_EXPENSE') { await this._seal('ledger', { desc: payload.desc, amount: -payload.amount, type: 'debit', category: 'general', classification: 'want', createdAt: Date.now() }); this._addChat('bot', `$${payload.amount} for ${payload.desc} 💰`); }
                 else if (intent === 'SECURITY_AUDIT') { const a = await performSecurityAudit(); this._addChat('bot', `Vault: ${a.status}. ${a.recommendation}`); }
                 else this._addChat('bot', payload);
             }
             if (count > 1) this._addChat('bot', `Processed ${count} commands.`);
-        } catch (err) { this._log('error', 'Chat failed:', err); this._addChat('bot', 'Error processing command.'); }
+        } catch (err) { this._log('error', 'Chat failed:', err); this._addChat('bot', p?.companion('error') || 'Error processing command.'); }
     }
 
     /* ── Edit Modal ── */
@@ -823,6 +924,39 @@ class SovereignApp extends HTMLElement {
             try { const { setSetting } = await import('../core/db.js'); await setSetting('autoArchive', this.classList.contains('on')); } catch (err) { this._log('error', 'Save setting failed:', err); }
         };
 
+        // Personality selector
+        this._shadow.querySelectorAll('.pbtn').forEach(btn => {
+            btn.onclick = async () => {
+                const { PERSONALITIES, personality } = await import('../core/personality.js');
+                const p = btn.dataset.p;
+                if (!PERSONALITIES[p]) return;
+                this._personality = p;
+                personality.set(p);
+                this._personalityInstance = personality;
+                localStorage.setItem('sovereign-personality', p);
+                this.style.setProperty('--personality-accent', personality.get().accent);
+                this._shadow.querySelectorAll('.pbtn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const desc = this._shadow.getElementById('personality-desc');
+                if (desc) desc.textContent = personality.get().description;
+                // Update greeting
+                if (this._companion) {
+                    this._addChat('bot', personality.greeting());
+                }
+            };
+        });
+
+        // Set initial personality button state
+        const activePBtn = this._shadow.querySelector(`.pbtn[data-p="${this._personality}"]`);
+        if (activePBtn) {
+            activePBtn.classList.add('active');
+            const desc = this._shadow.getElementById('personality-desc');
+            if (desc) {
+                const { PERSONALITIES } = await import('../core/personality.js');
+                desc.textContent = PERSONALITIES[this._personality]?.description || '';
+            }
+        }
+
         // Delegated: task toggle, edit, delete, habit check, modal close
         this._shadow.addEventListener('click', async e => {
             const chk = e.target.closest('.chk');
@@ -999,6 +1133,17 @@ class SovereignApp extends HTMLElement {
         .tog.on{background:var(--primary)}
         .tog::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform 0.2s}
         .tog.on::after{transform:translateX(16px)}
+        .pbtn{padding:0.5rem 0.75rem;border-radius:var(--r);font-size:0.75rem;cursor:pointer;border:1px solid var(--bdr);background:var(--s2);color:var(--t2);transition:all 0.2s}
+        .pbtn:hover{background:rgba(255,255,255,0.08);color:var(--t1)}
+        .pbtn.active{border-color:var(--personality-accent,var(--primary));color:var(--personality-accent,var(--primary));background:rgba(16,185,129,0.1)}
+        .prompt{display:flex;align-items:center;justify-content:space-between;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:var(--r);padding:0.5rem 0.75rem;margin-bottom:0.5rem;font-size:0.75rem;color:var(--t1)}
+        .prompt.nudge{background:rgba(59,130,246,0.08);border-color:rgba(59,130,246,0.2)}
+        .prompt.reminder{background:rgba(245,158,11,0.08);border-color:rgba(245,158,11,0.2)}
+        .prompt-dismiss{background:none;border:none;color:var(--t2);cursor:pointer;padding:0.125rem;font-size:0.7rem}
+        .prompt-dismiss:hover{color:var(--danger)}
+        .mood-btns{display:flex;gap:0.375rem;margin-top:0.5rem}
+        .mood-btn{padding:0.375rem 0.625rem;border-radius:var(--r);font-size:0.75rem;cursor:pointer;border:1px solid var(--bdr);background:var(--s2);color:var(--t1)}
+        .mood-btn:hover{background:rgba(255,255,255,0.08)}
         .mnav{display:none}
         @media (max-width:768px) {.side{display:none}.mnav{display:flex!important;position:fixed;bottom:0;left:0;right:0;background:var(--s1);border-top:1px solid var(--bdr);padding:0.375rem;gap:0.125rem;overflow-x:auto;z-index:100;padding-bottom:calc(0.375rem + env(safe-area-inset-bottom))}.mtb{flex-shrink:0;padding:0.375rem 0.5rem;border-radius:var(--r);font-size:0.6rem;color:var(--t2);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:0.125rem;background:none;border:none}.mtb.active{color:var(--primary);background:rgba(16,185,129,0.1)}.mti{font-size:1rem}.content{padding-bottom:70px}.fr{grid-template-columns:1fr}.sg{grid-template-columns:repeat(2,1fr)}}
         ::-webkit-scrollbar{width:5px}
@@ -1139,6 +1284,16 @@ class SovereignApp extends HTMLElement {
                     </div>
                     <!-- Settings -->
                     <div class="mod" data-mod="settings">
+                        <div class="card"><div style="font-size:0.8rem;font-weight:600;margin-bottom:0.75rem">🎭 Companion Personality</div>
+                            <div style="display:flex;gap:0.5rem;flex-wrap:wrap" id="personality-selector">
+                                <button class="pbtn" data-p="zen" title="Calm, minimal, focused">🧘 Zen</button>
+                                <button class="pbtn active" data-p="focus" title="Sharp, direct, efficient">🎯 Focus</button>
+                                <button class="pbtn" data-p="playful" title="Warm, fun, encouraging">🎉 Playful</button>
+                                <button class="pbtn" data-p="professional" title="Clean, formal, precise">💼 Professional</button>
+                                <button class="pbtn" data-p="energy" title="Bold, energetic, motivating">⚡ Energy</button>
+                            </div>
+                            <div style="font-size:0.65rem;color:var(--t2);margin-top:0.5rem" id="personality-desc">Sharp, direct, efficient. Blue tones. Zero fluff.</div>
+                        </div>
                         <div class="card"><div style="font-size:0.8rem;font-weight:600;margin-bottom:0.75rem">Data Retention</div>
                             <div class="sr"><div><div class="srl">History Limit</div><div class="srd">Max version snapshots per item</div></div><input type="number" id="set-history" class="fi" style="width:70px" value="5" min="1" max="50"></div>
                             <div class="sr"><div><div class="srl">Retention Days</div><div class="srd">Days to keep history</div></div><input type="number" id="set-retention" class="fi" style="width:70px" value="30" min="1" max="365"></div>
