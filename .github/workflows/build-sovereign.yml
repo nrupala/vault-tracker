@@ -1,0 +1,54 @@
+name: Sovereign Core Auto-Builder
+
+on:
+  push:
+    branches:
+      - sovereign-core
+  workflow_dispatch: # Allows manual triggering from the GitHub Actions tab
+
+jobs:
+  build-and-package:
+    name: Build PWA & Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: ☕ Setup Java (JDK 17 for Android build)
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: 🛠️ Execute Universal Packager Script
+        run: |
+          cd v2-prototype
+          chmod +x package-pwa-apk.sh
+          ./package-pwa-apk.sh
+
+      - name: 📱 Compile Android APK (Debug Stack)
+        run: |
+          cd v2-prototype/.apk-wrapper/android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: 📦 Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sovereign-Vault-v2-Android-APK
+          path: v2-prototype/.apk-wrapper/android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: 🌐 Upload PWA Asset Bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sovereign-Vault-v2-PWA-Web
+          path: |
+            v2-prototype/
+            !v2-prototype/.apk-wrapper/
+            !v2-prototype/package-pwa-apk.sh
