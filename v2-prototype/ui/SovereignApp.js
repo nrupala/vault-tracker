@@ -23,14 +23,48 @@ class SovereignApp extends HTMLElement {
         this._themeIdx = 0;
         this._authMode = 'unlock';
         this._intelligence = null;
+        this._interactionIntelligence = null;
         this._prompts = [];
         this._personality = 'focus';
         this._companion = null;
+        this._journalPrompts = [
+            "How are you feeling today?",
+            "What went well today?",
+            "What's on your mind?",
+            "What are you grateful for?",
+            "What would you like to let go of?",
+            "What did you learn today?",
+            "What made you smile today?",
+            "What's one thing you want to remember?",
+            "How did you take care of yourself today?",
+            "What challenged you today?",
+            "What are you looking forward to?",
+            "What would you tell your past self?",
+            "What's something you're proud of?",
+            "What drained your energy today?",
+            "What gave you energy today?",
+            "What's a small win you had today?",
+            "What's something you want to improve tomorrow?",
+            "Who made a positive impact on your day?",
+            "What's a thought you can't shake?",
+            "If today had a title, what would it be?",
+            "What's something you noticed today that you usually miss?",
+            "What's a decision you made today that you're glad about?",
+            "What's something you want to be kinder to yourself about?",
+            "What's a moment today you'd like to relive?",
+            "What's weighing on your heart right now?",
+            "What's something beautiful you saw today?",
+            "What's a conversation you wish you could have?",
+            "What's something you're ready to forgive?",
+            "What's a boundary you need to set?",
+            "What's something you want to celebrate about yourself?"
+        ];
     }
 
     async connectedCallback() {
         this._render();
         this._bind();
+        this._setAuthMode('unlock');
         await this._loadVaultList();
     }
 
@@ -78,15 +112,18 @@ class SovereignApp extends HTMLElement {
         this._authErr('');
         const pw = this._shadow.getElementById('auth-pw'); if (pw) pw.value = '';
         const vni = this._shadow.getElementById('vault-name-input'); if (vni) vni.value = '';
-        const vsg = this._shadow.getElementById('vault-select-group'); if (vsg) vsg.style.display = 'block';
-        const vng = this._shadow.getElementById('vault-name-group'); if (vng) vng.style.display = mode === 'create' ? 'block' : 'none';
+        const vsg = this._shadow.getElementById('vault-select-group');
+        if (vsg) vsg.style.display = (mode === 'create') ? 'none' : 'block';
+        const vng = this._shadow.getElementById('vault-name-group');
+        if (vng) vng.style.display = (mode === 'create') ? 'block' : 'none';
         const lbl = this._shadow.getElementById('auth-pw-label');
         if (lbl) lbl.textContent = mode === 'delete' ? 'Confirm Password to Delete' : 'Master Password';
         const btn = this._shadow.getElementById('auth-submit');
         if (btn) btn.textContent = mode === 'create' ? 'Create Vault' : mode === 'delete' ? 'Delete Vault' : 'Unlock Vault';
-        const cl = this._shadow.getElementById('create-link'); if (cl) cl.style.display = mode === 'unlock' ? 'inline' : 'none';
-        const bl = this._shadow.getElementById('back-link'); if (bl) bl.style.display = mode !== 'unlock' ? 'inline' : 'none';
-        const dl = this._shadow.getElementById('delete-link'); if (dl) dl.style.display = mode === 'unlock' ? 'inline' : 'none';
+        // Update tab active state
+        this._shadow.querySelectorAll('.mode-tab').forEach(t => {
+            t.classList.toggle('active', t.dataset.mode === mode);
+        });
     }
 
     async _handleAuth() {
@@ -116,10 +153,38 @@ class SovereignApp extends HTMLElement {
                 const vaults = await getAllVaults();
                 const vault = vaults.find(v => v.id === vid);
                 if (!vault) return this._authErr('Vault not found');
-                const salt = new Uint8Array(vault.salt);
+                
+                // Ensure salt is proper Uint8Array
+                let salt;
+                if (vault.salt instanceof Uint8Array) {
+                    salt = vault.salt;
+                } else if (vault.salt instanceof ArrayBuffer) {
+                    salt = new Uint8Array(vault.salt);
+                } else if (Array.isArray(vault.salt)) {
+                    salt = new Uint8Array(vault.salt);
+                } else {
+                    return this._authErr('Vault data corrupted');
+                }
+                
                 const valid = await verifyPassword(pw, salt, vault.verifier);
-                if (!valid) return this._authErr('Wrong password');
-                this._key = await deriveKey(pw, salt);
+                if (!valid) {
+                    // Try legacy vault unlock (old format without verifier)
+                    this._authErr('Trying legacy vault format...');
+                    const legacyValid = await this._tryLegacyUnlock(pw, salt, vault);
+                    if (!legacyValid) return this._authErr('Wrong password');
+                    
+                    // Legacy vault authenticated — trigger migration
+                    this._authErr('Converting vault to new format...');
+                    const migrationResult = await this._migrateVault(vault, pw, salt);
+                    if (!migrationResult.success) {
+                        return this._authErr(`Vault conversion failed. Log: ${migrationResult.logFile}. Please email this log to the developer.`);
+                    }
+                    this._authErr('Vault is now in new format. Unlocking...');
+                    // Re-verify with new format
+                    this._key = await deriveKey(pw, salt);
+                } else {
+                    this._key = await deriveKey(pw, salt);
+                }
                 this._vaultId = vault.id; this._vaultName = vault.name; this._salt = salt;
             } else if (mode === 'delete') {
                 const vid = this._shadow.getElementById('vault-select')?.value;
@@ -127,9 +192,18 @@ class SovereignApp extends HTMLElement {
                 const vaults = await getAllVaults();
                 const vault = vaults.find(v => v.id === vid);
                 if (!vault) return this._authErr('Vault not found');
-                const salt = new Uint8Array(vault.salt);
-                const valid = await verifyPassword(pw, salt, vault.verifier);
+                
+                let salt;
+                if (vault.salt instanceof Uint8Array) salt = vault.salt;
+                else if (vault.salt instanceof ArrayBuffer) salt = new Uint8Array(vault.salt);
+                else if (Array.isArray(vault.salt)) salt = new Uint8Array(vault.salt);
+                else return this._authErr('Vault data corrupted');
+                
+                let valid = await verifyPassword(pw, salt, vault.verifier);
+                // Fallback: legacy unlock
+                if (!valid) valid = await this._tryLegacyUnlock(pw, salt, vault);
                 if (!valid) return this._authErr('Wrong password');
+                
                 await deleteVault(vid);
                 this._authErr('Vault "' + vault.name + '" permanently deleted');
                 await this._loadVaultList();
@@ -137,10 +211,7 @@ class SovereignApp extends HTMLElement {
                 return;
             }
 
-            // Show vault DNA on auth success
-            const dnaEl = this._shadow.getElementById('vault-dna');
-            if (dnaEl) dnaEl.innerHTML = vaultDNA(this._vaultId);
-
+            // After successful auth, load app
             await this._loadSettings();
             await this._loadItems();
             await this._initIntelligence();
@@ -154,6 +225,108 @@ class SovereignApp extends HTMLElement {
             this._nav(this._tab);
         } catch (e) { this._log('error', 'Auth failed:', e); this._authErr('Error: ' + e.message); }
     }
+
+    /* ── Legacy Vault Unlock (old format without verifier) ── */
+    async _tryLegacyUnlock(password, salt, vault) {
+        try {
+            const { deriveKey, encryptData, decryptData } = await import('../core/crypto.js');
+            const { getAllVessels } = await import('../core/db.js');
+            
+            // Derive key with legacy salt
+            const key = await deriveKey(password, salt);
+            
+            // Try to decrypt the first vessel as a test
+            const vessels = await getAllVessels();
+            if (vessels.length === 0) {
+                // Empty vault — assume password is correct
+                return true;
+            }
+            
+            // Try to decrypt first vessel
+            const first = vessels[0];
+            try {
+                await decryptData(key, first.blob, first.iv);
+                return true; // Successfully decrypted — password is correct
+            } catch {
+                return false; // Wrong password
+            }
+        } catch (err) {
+            this._log('warn', 'Legacy unlock failed:', err);
+            return false;
+        }
+    }
+
+    /* ── Migrate Legacy Vault to New Format ── */
+    async _migrateVault(vault, password, salt) {
+        const logFile = `vault-migration-${vault.id}-${Date.now()}.log`;
+        const log = [];
+        const logEntry = (msg) => { log.push(`[${new Date().toISOString()}] ${msg}`); };
+        
+        try {
+            logEntry(`Starting vault migration for "${vault.name}" (${vault.id})`);
+            
+            const { deriveKey, createVerifier, encryptData } = await import('../core/crypto.js');
+            const { getAllVessels, saveVault, saveVessel, setSetting, getSetting } = await import('../core/db.js');
+            
+            // Step 1: Create verifier for new format
+            logEntry('Creating challenge-verifier...');
+            const verifier = await createVerifier(password, salt);
+            
+            // Step 2: Save vault with new format
+            logEntry('Updating vault metadata...');
+            await saveVault(vault.id, vault.name, salt, verifier);
+            
+            // Step 3: Re-encrypt all vessels with new format (they're already encrypted, just need metadata update)
+            logEntry('Verifying vessel integrity...');
+            const vessels = await getAllVessels();
+            let verified = 0;
+            let failed = 0;
+            const key = await deriveKey(password, salt);
+            const { decryptData } = await import('../core/crypto.js');
+            
+            for (const v of vessels) {
+                try {
+                    await decryptData(key, v.blob, v.iv);
+                    verified++;
+                } catch (err) {
+                    failed++;
+                    logEntry(`FAILED to decrypt vessel ${v.id}: ${err.message}`);
+                }
+            }
+            
+            logEntry(`Verification: ${verified} passed, ${failed} failed`);
+            
+            // Step 4: Migrate settings (habit checkins, etc.)
+            logEntry('Migrating settings...');
+            const habitCheckins = await getSetting('habitCheckins');
+            if (habitCheckins) {
+                // Re-encrypt with vault key
+                const { ciphertext, iv } = await encryptData(key, habitCheckins);
+                await setSetting('habitCheckins', { ciphertext: Array.from(new Uint8Array(ciphertext)), iv: Array.from(iv) });
+                logEntry('Habit checkins re-encrypted');
+            }
+            
+            // Step 5: Mark migration complete
+            logEntry('Migration complete');
+            await setSetting('__vaultVersion', 2);
+            
+            return { success: true, logFile, verified, failed };
+        } catch (err) {
+            logEntry(`MIGRATION FAILED: ${err.message}`);
+            logEntry(`Stack: ${err.stack}`);
+            
+            // Save log file
+            try {
+                const { setSetting } = await import('../core/db.js');
+                await setSetting(`__migrationLog_${vault.id}`, log);
+            } catch (saveErr) {
+                logEntry(`Failed to save migration log: ${saveErr.message}`);
+            }
+            
+            return { success: false, logFile, error: err.message, log };
+        }
+    }
+
 
     _authErr(msg) { const el = this._shadow.getElementById('auth-err'); if (el) el.textContent = msg; }
 
@@ -191,7 +364,20 @@ class SovereignApp extends HTMLElement {
                 } catch (err) { this._log('warn', 'Decrypt failed for', v.id, err); }
             }
             const hd = await getSetting('habitCheckins');
-            if (hd) this._habits = JSON.parse(hd);
+            if (hd) {
+                try {
+                    // Try decrypting (encrypted format)
+                    const parsed = JSON.parse(hd);
+                    if (parsed.ciphertext && parsed.iv) {
+                        const { decryptData } = await import('../core/crypto.js');
+                        const decrypted = await decryptData(this._key, new Uint8Array(parsed.ciphertext), new Uint8Array(parsed.iv));
+                        this._habits = JSON.parse(decrypted);
+                    } else {
+                        // Legacy plaintext
+                        this._habits = parsed;
+                    }
+                } catch { this._habits = JSON.parse(hd); }
+            }
         } catch (err) { this._log('error', 'Load items failed:', err); }
     }
 
@@ -218,6 +404,7 @@ class SovereignApp extends HTMLElement {
             const { CompanionEngine } = await import('../core/companion-engine.js');
             const { PERSONALITIES } = await import('../core/personality.js');
             this._companion = new CompanionEngine();
+            this._companion.setKey(this._key); // Set vault key for encryption
             await this._companion.load();
 
             // Load saved personality
@@ -239,6 +426,29 @@ class SovereignApp extends HTMLElement {
             const moodPrompt = this._companion.moodCheckIn();
             if (moodPrompt) {
                 this._addChat('bot', moodPrompt.text);
+            }
+
+            // Morning/evening prompts
+            const hour = new Date().getHours();
+            if (hour >= 8 && hour <= 10) {
+                const pending = this._items.filter(i => i.type === 'task' && !i.data.completed).length;
+                if (pending > 0) this._addChat('bot', `☀️ Good morning! You have ${pending} pending task${pending > 1 ? 's' : ''}. What would you like to focus on today?`);
+            }
+            if (hour >= 17 && hour <= 19) {
+                const today = new Date().toDateString();
+                const todayDone = this._items.filter(i => i.type === 'task' && i.data.completed && new Date(i.timestamp).toDateString() === today).length;
+                if (todayDone > 0) this._addChat('bot', `🌅 You completed ${todayDone} task${todayDone > 1 ? 's' : ''} today. How are you feeling about your progress?`);
+            }
+
+            // Weekly summary (shown on Mondays)
+            const dayOfWeek = new Date().getDay();
+            if (dayOfWeek === 1 && hour >= 9) {
+                const weekAgo = Date.now() - 604800000;
+                const weekTasks = this._items.filter(i => i.type === 'task' && i.timestamp > weekAgo);
+                const weekDone = weekTasks.filter(t => t.data.completed).length;
+                const weekJournal = this._items.filter(i => i.type === 'journal' && i.timestamp > weekAgo).length;
+                const weekExpenses = this._items.filter(i => i.type === 'ledger' && i.timestamp > weekAgo && i.data.type === 'debit').reduce((s, l) => s + Math.abs(parseFloat(l.data.amount) || 0), 0);
+                this._addChat('bot', `📊 Weekly Summary: ${weekDone}/${weekTasks.length} tasks completed, ${weekJournal} journal entries, $${weekExpenses.toFixed(2)} spent. ${weekDone > weekTasks.length / 2 ? "Great week!" : "Room to grow this week."}`);
             }
 
             // Apply personality accent color
@@ -293,7 +503,7 @@ class SovereignApp extends HTMLElement {
     }
 
     _renderMod() {
-        const fn = { tasks: '_renderTasks', notes: '_renderNotes', habits: '_renderHabits', ledger: '_renderLedger', calendar: '_renderCalendar', analytics: '_renderAnalytics', companion: '_renderCompanion', settings: '_renderSettings' }[this._tab];
+        const fn = { tasks: '_renderTasks', notes: '_renderNotes', habits: '_renderHabits', ledger: '_renderLedger', journal: '_renderJournal', calendar: '_renderCalendar', analytics: '_renderAnalytics', chat: '_renderChat', companion: '_renderCompanion', settings: '_renderSettings' }[this._tab];
         if (fn) this[fn]();
     }
 
@@ -340,6 +550,69 @@ class SovereignApp extends HTMLElement {
         }).join('') + `</div>`;
     }
 
+    /* ── Render: Journal ── */
+    _renderJournal() {
+        const entries = this._items.filter(i => i.type === 'journal').sort((a, b) => b.timestamp - a.timestamp);
+        const prompt = this._journalPrompts[Math.floor(Date.now() / 86400000) % this._journalPrompts.length];
+        const today = new Date().toDateString();
+        const todayEntry = entries.find(e => new Date(e.timestamp).toDateString() === today);
+
+        const stats = this._shadow.getElementById('journal-stats');
+        if (stats) {
+            const moods = entries.filter(e => e.data.mood).map(e => e.data.mood);
+            const moodCounts = {};
+            moods.forEach(m => { moodCounts[m] = (moodCounts[m] || 0) + 1; });
+            const topMood = Object.entries(moodCounts).sort((a, b) => b[1] - a[1])[0];
+            stats.innerHTML = `<div class="sc"><div class="sl">Entries</div><div class="sv">${entries.length}</div></div><div class="sc"><div class="sl">This Week</div><div class="sv">${entries.filter(e => (Date.now() - e.timestamp) < 604800000).length}</div></div><div class="sc"><div class="sl">Top Mood</div><div class="sv">${topMood ? this._moodEmoji(topMood[0]) : '—'}</div></div><div class="sc"><div class="sl">Streak</div><div class="sv">${this._journalStreak(entries)} days</div></div>`;
+        }
+
+        const list = this._shadow.getElementById('journal-list');
+        if (!list) return;
+        if (!entries.length) {
+            list.innerHTML = `<div class="empty"><div class="ei">📔</div><div>No journal entries yet</div><div style="font-size:0.75rem;color:var(--t2);margin-top:0.5rem">Your private space for unstructured thoughts</div></div>`;
+            return;
+        }
+
+        // Group by date
+        const grouped = {};
+        entries.forEach(e => {
+            const date = new Date(e.timestamp).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+            if (!grouped[date]) grouped[date] = [];
+            grouped[date].push(e);
+        });
+
+        let html = '';
+        for (const [date, items] of Object.entries(grouped)) {
+            html += `<div style="font-size:0.7rem;color:var(--t2);margin:1rem 0 0.5rem;text-transform:uppercase;letter-spacing:0.05em">${date}</div>`;
+            html += items.map(e => {
+                const mood = e.data.mood ? this._moodEmoji(e.data.mood) : '';
+                const preview = (e.data.content || '').substring(0, 150);
+                return `<div class="ic ${e.isFlagged ? 'flagged' : ''}"><div class="ib"><div class="it" data-edit="${e.id}">${mood} ${this._esc(e.data.title || 'Untitled Entry')}</div><div class="im"><span>${this._esc(preview)}${(e.data.content || '').length > 150 ? '...' : ''}</span>${(e.tags || []).map(g => `<span class="tg">${this._esc(g)}</span>`).join('')}<span>${new Date(e.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div></div><button class="ab" data-edit="${e.id}">✎</button><button class="ab del" data-del="${e.id}">✕</button></div>`;
+            }).join('');
+        }
+        list.innerHTML = html;
+
+        // Show today's prompt
+        const promptEl = this._shadow.getElementById('journal-prompt');
+        if (promptEl) {
+            promptEl.textContent = todayEntry ? `Continue today's entry...` : `"${prompt}"`;
+        }
+    }
+
+    _moodEmoji(mood) {
+        const map = { good: '😊', okay: '😐', sad: '😔', stressed: '😤', great: '🤩', tired: '😴', anxious: '😰', grateful: '🙏', hopeful: '🌟', peaceful: '🧘' };
+        return map[mood] || '📝';
+    }
+
+    _journalStreak(entries) {
+        if (!entries.length) return 0;
+        let streak = 0;
+        const d = new Date();
+        const dates = new Set(entries.map(e => new Date(e.timestamp).toDateString()));
+        while (dates.has(d.toDateString())) { streak++; d.setDate(d.getDate() - 1); }
+        return streak;
+    }
+
     /* ── Render: Ledger ── */
     _renderLedger() {
         const items = this._items.filter(i => i.type === 'ledger').sort((a, b) => a.timestamp - b.timestamp);
@@ -374,58 +647,74 @@ class SovereignApp extends HTMLElement {
         const filtered = this._calFilter === 'all' ? all : all.filter(i => i.type === this._calFilter);
 
         if (this._calView === 'month') {
-            const y = this._calDate.getFullYear(), m = this._calDate.getMonth();
-            title.textContent = new Date(y, m).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-            const fd = new Date(y, m, 1), ld = new Date(y, m + 1, 0), sd = fd.getDay();
+            // Use UTC to avoid timezone date shifts
+            const y = this._calDate.getUTCFullYear(), m = this._calDate.getUTCMonth();
+            title.textContent = new Date(Date.UTC(y, m, 1)).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+            const fd = new Date(Date.UTC(y, m, 1));
+            const ld = new Date(Date.UTC(y, m + 1, 0));
+            const sd = fd.getUTCDay(); // 0=Sun, 1=Mon, ..., 6=Sat
             const today = new Date();
             let h = '<div class="cg">';
             ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].forEach(d => h += `<div class="ch">${d}</div>`);
-            const start = new Date(fd); start.setDate(start.getDate() - sd);
+            // Start from the Sunday before or on the 1st
+            const start = new Date(Date.UTC(y, m, 1 - sd));
             for (let i = 0; i < 42; i++) {
-                const d = new Date(start); d.setDate(d.getDate() + i);
-                const other = d.getMonth() !== m, isToday = d.toDateString() === today.toDateString();
-                const ds = d.toDateString();
-                const di = filtered.filter(it => new Date(it.timestamp).toDateString() === ds);
-                h += `<div class="cd ${other ? 'om' : ''} ${isToday ? 'td' : ''}"><div class="cdn">${d.getDate()}</div>${di.slice(0, 3).map(it => { const t = it.data?.title || it.data?.desc || it.data?.content?.substring(0, 15) || it.type; return `<div class="ci ${it.type}">${this._esc(t)}</div>`; }).join('')}${di.length > 3 ? `<div class="cm">+${di.length - 3}</div>` : ''}</div>`;
-                if (d > ld && i >= 34) break;
+                const d = new Date(start.getTime() + i * 86400000); // Add days in ms to avoid setDate timezone issues
+                const other = d.getUTCMonth() !== m;
+                const isToday = d.getUTCFullYear() === today.getUTCFullYear() && d.getUTCMonth() === today.getUTCMonth() && d.getUTCDate() === today.getUTCDate();
+                const ds = d.toISOString().split('T')[0]; // YYYY-MM-DD in UTC
+                const di = filtered.filter(it => {
+                    const itemDate = new Date(it.timestamp);
+                    return itemDate.getUTCFullYear() === d.getUTCFullYear() && itemDate.getUTCMonth() === d.getUTCMonth() && itemDate.getUTCDate() === d.getUTCDate();
+                });
+                h += `<div class="cd ${other ? 'om' : ''} ${isToday ? 'td' : ''}"><div class="cdn">${d.getUTCDate()}</div>${di.slice(0, 3).map(it => { const t = it.data?.title || it.data?.desc || it.data?.content?.substring(0, 15) || it.type; return `<div class="ci ${it.type}">${this._esc(t)}</div>`; }).join('')}${di.length > 3 ? `<div class="cm">+${di.length - 3}</div>` : ''}</div>`;
+                if (d.getTime() > ld.getTime() && i >= 34) break;
             }
             h += '</div>'; view.innerHTML = h;
         } else if (this._calView === 'week') {
-            const sow = new Date(this._calDate); sow.setDate(sow.getDate() - sow.getDay());
-            const eow = new Date(sow); eow.setDate(eow.getDate() + 6);
+            const sow = new Date(this._calDate.getTime());
+            sow.setUTCDate(sow.getUTCDate() - sow.getUTCDay());
+            const eow = new Date(sow.getTime() + 6 * 86400000);
             title.textContent = `${sow.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${eow.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
             let h = '<div class="cg">';
             ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].forEach(d => h += `<div class="ch">${d}</div>`);
             for (let i = 0; i < 7; i++) {
-                const d = new Date(sow); d.setDate(d.getDate() + i);
-                const isToday = d.toDateString() === new Date().toDateString();
-                const ds = d.toDateString();
-                const di = filtered.filter(it => new Date(it.timestamp).toDateString() === ds);
-                h += `<div class="cd ${isToday ? 'td' : ''}" style="min-height:100px"><div class="cdn">${d.getDate()}</div>${di.slice(0, 4).map(it => { const t = it.data?.title || it.data?.desc || it.data?.content?.substring(0, 15) || it.type; return `<div class="ci ${it.type}">${this._esc(t)}</div>`; }).join('')}${di.length > 4 ? `<div class="cm">+${di.length - 4}</div>` : ''}</div>`;
+                const d = new Date(sow.getTime() + i * 86400000);
+                const isToday = d.getUTCFullYear() === today.getUTCFullYear() && d.getUTCMonth() === today.getUTCMonth() && d.getUTCDate() === today.getUTCDate();
+                const di = filtered.filter(it => {
+                    const itemDate = new Date(it.timestamp);
+                    return itemDate.getUTCFullYear() === d.getUTCFullYear() && itemDate.getUTCMonth() === d.getUTCMonth() && itemDate.getUTCDate() === d.getUTCDate();
+                });
+                h += `<div class="cd ${isToday ? 'td' : ''}" style="min-height:100px"><div class="cdn">${d.getUTCDate()}</div>${di.slice(0, 4).map(it => { const t = it.data?.title || it.data?.desc || it.data?.content?.substring(0, 15) || it.type; return `<div class="ci ${it.type}">${this._esc(t)}</div>`; }).join('')}${di.length > 4 ? `<div class="cm">+${di.length - 4}</div>` : ''}</div>`;
             }
             h += '</div>'; view.innerHTML = h;
         } else if (this._calView === 'workweek') {
-            const sow = new Date(this._calDate);
-            const day = sow.getDay();
-            sow.setDate(sow.getDate() - day + (day === 0 ? -6 : 1)); // Monday
-            const eow = new Date(sow); eow.setDate(eow.getDate() + 4);
+            const sow = new Date(this._calDate.getTime());
+            const day = sow.getUTCDay();
+            sow.setUTCDate(sow.getUTCDate() - day + (day === 0 ? -6 : 1)); // Monday
+            const eow = new Date(sow.getTime() + 4 * 86400000);
             title.textContent = `${sow.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${eow.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
             let h = '<div class="cg">';
             ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].forEach(d => h += `<div class="ch">${d}</div>`);
             for (let i = 0; i < 5; i++) {
-                const d = new Date(sow); d.setDate(d.getDate() + i);
-                const isToday = d.toDateString() === new Date().toDateString();
-                const ds = d.toDateString();
-                const di = filtered.filter(it => new Date(it.timestamp).toDateString() === ds);
-                h += `<div class="cd ${isToday ? 'td' : ''}" style="min-height:100px"><div class="cdn">${d.getDate()}</div>${di.slice(0, 4).map(it => { const t = it.data?.title || it.data?.desc || it.data?.content?.substring(0, 15) || it.type; return `<div class="ci ${it.type}">${this._esc(t)}</div>`; }).join('')}${di.length > 4 ? `<div class="cm">+${di.length - 4}</div>` : ''}</div>`;
+                const d = new Date(sow.getTime() + i * 86400000);
+                const isToday = d.getUTCFullYear() === today.getUTCFullYear() && d.getUTCMonth() === today.getUTCMonth() && d.getUTCDate() === today.getUTCDate();
+                const di = filtered.filter(it => {
+                    const itemDate = new Date(it.timestamp);
+                    return itemDate.getUTCFullYear() === d.getUTCFullYear() && itemDate.getUTCMonth() === d.getUTCMonth() && itemDate.getUTCDate() === d.getUTCDate();
+                });
+                h += `<div class="cd ${isToday ? 'td' : ''}" style="min-height:100px"><div class="cdn">${d.getUTCDate()}</div>${di.slice(0, 4).map(it => { const t = it.data?.title || it.data?.desc || it.data?.content?.substring(0, 15) || it.type; return `<div class="ci ${it.type}">${this._esc(t)}</div>`; }).join('')}${di.length > 4 ? `<div class="cm">+${di.length - 4}</div>` : ''}</div>`;
             }
             h += '</div>'; view.innerHTML = h;
         } else if (this._calView === 'day') {
             title.textContent = this._calDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-            const di = filtered.filter(it => new Date(it.timestamp).toDateString() === this._calDate.toDateString());
+            const di = filtered.filter(it => {
+                const itemDate = new Date(it.timestamp);
+                return itemDate.getUTCFullYear() === this._calDate.getUTCFullYear() && itemDate.getUTCMonth() === this._calDate.getUTCMonth() && itemDate.getUTCDate() === this._calDate.getUTCDate();
+            });
             let h = '';
             for (let hr = 0; hr < 24; hr++) {
-                const hi = di.filter(it => new Date(it.timestamp).getHours() === hr);
+                const hi = di.filter(it => new Date(it.timestamp).getUTCHours() === hr);
                 h += `<div class="dh"><div class="dhl">${hr.toString().padStart(2, '0')}:00</div><div class="dhc">${hi.map(it => { const t = it.data?.title || it.data?.desc || it.data?.content?.substring(0, 30) || it.type; return `<div class="ci ${it.type}" style="margin-bottom:0.25rem">${this._esc(t)}</div>`; }).join('')}</div></div>`;
             }
             view.innerHTML = h;
@@ -465,6 +754,15 @@ class SovereignApp extends HTMLElement {
         if (tsp > 0 && ls.wp > 40) insights.push({ t: 'w', m: `High discretionary spending: ${ls.wp}% of expenses are "wants".` });
         const ov = tasks.filter(t => !t.data.completed && t.data.dueDate && new Date(t.data.dueDate) < new Date()).length;
         if (ov > 3) insights.push({ t: 'd', m: `${ov} overdue tasks. Consider breaking them down.` });
+        // Monthly reflection
+        const monthAgo = Date.now() - 2592000000;
+        const monthTasks = tasks.filter(t => t.timestamp > monthAgo);
+        const monthDone = monthTasks.filter(t => t.data.completed).length;
+        const monthJournal = this._items.filter(i => i.type === 'journal' && i.timestamp > monthAgo).length;
+        if (monthTasks.length > 0) insights.push({ t: 'i', m: `This month: ${monthDone}/${monthTasks.length} tasks completed (${monthTasks.length ? Math.round(monthDone/monthTasks.length*100) : 0}%). ${monthJournal > 0 ? `${monthJournal} journal entries written.` : ''} You're growing.` });
+        // Habit consistency
+        const lsh = habits.filter(h => { const ci = this._habits[h.id] || []; let s = 0; const d = new Date(); while (ci.includes(d.toDateString())) { s++; d.setDate(d.getDate() - 1); } return s < 3; }).length;
+        if (habits.length > 0 && lsh / habits.length > 0.6) insights.push({ t: 'i', m: `${lsh}/${habits.length} habits have streaks < 3 days. Consistency opportunity.` });
         if (!insights.length) insights.push({ t: 'i', m: 'All systems optimal.' });
         const ic = { w: 'var(--warn)', d: 'var(--danger)', i: 'var(--info)' };
         this._shadow.getElementById('insights').innerHTML = insights.map(i => `<div style="padding:0.625rem 0;border-bottom:1px solid var(--bdr);font-size:0.8rem"><span style="color:${ic[i.t]};font-weight:600">● </span>${i.m}</div>`).join('');
@@ -474,6 +772,42 @@ class SovereignApp extends HTMLElement {
     _renderCompanion() {
         const msgs = this._shadow.getElementById('chat-msgs');
         if (msgs) msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    /* ── Render: Peer Chat ── */
+    async _renderChat() {
+        try {
+            const { getAllConversations, getAllContacts } = await import('../core/chat-db.js');
+            const convs = await getAllConversations();
+            const contacts = await getAllContacts();
+
+            // Always show conversation list
+            const convList = this._shadow.getElementById('chat-conversations');
+            if (convList) convList.parentElement.style.display = 'block';
+
+            // Hide message view unless actively in a conversation
+            const msgView = this._shadow.getElementById('chat-message-view');
+            if (msgView && !this._currentChatConv) msgView.style.display = 'none';
+
+            if (!convList) return;
+
+            if (!convs.length) {
+                convList.innerHTML = '<div class="empty"><div class="ei">💬</div><div>No conversations yet</div><div style="font-size:0.75rem;color:var(--t2);margin-top:0.5rem">Start a chat with a contact</div></div>';
+                return;
+            }
+
+            convList.innerHTML = convs.map(c => {
+                const lastMsg = c.lastMessage || 'No messages yet';
+                const time = c.lastActivity ? new Date(c.lastActivity).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                return `<div class="ic" data-chat-conv="${c.id}">
+                    <div class="ib">
+                        <div class="it">${this._esc(c.name || 'Unknown')}</div>
+                        <div class="im"><span>${this._esc(lastMsg)}</span><span>${time}</span></div>
+                    </div>
+                    <button class="ab del" data-chat-del-conv="${c.id}" title="Delete conversation">✕</button>
+                </div>`;
+            }).join('');
+        } catch (err) { this._log('warn', 'Chat render failed:', err); }
     }
 
     /* ── Render: Settings ── */
@@ -600,6 +934,15 @@ class SovereignApp extends HTMLElement {
                 <div class="emg"><label class="eml">Color</label><select id="edit-color" class="fs"><option value="none" ${d.color === 'none' ? 'selected' : ''}>None</option><option value="orange" ${d.color === 'orange' ? 'selected' : ''}>Orange</option><option value="green" ${d.color === 'green' ? 'selected' : ''}>Green</option></select></div></div>
                 <div class="emg"><label class="eml">Tags (comma sep)</label><input type="text" id="edit-tags" class="fi" value="${(item.tags || []).join(', ')}"></div>
                 <div class="emg" style="display:flex;align-items:center;gap:0.5rem"><input type="checkbox" id="edit-flagged" ${item.isFlagged ? 'checked' : ''}><label for="edit-flagged" style="font-size:0.8rem">Flagged</label></div>`;
+        } else if (type === 'journal') {
+            const moods = ['good','okay','sad','stressed','grateful','hopeful','peaceful','great','tired','anxious'];
+            const moodOptions = moods.map(m => `<option value="${m}" ${d.mood === m ? 'selected' : ''}>${this._moodEmoji(m)} ${m}</option>`).join('');
+            html = `
+                <div class="emg"><label class="eml">Title</label><input type="text" id="edit-title" class="fi" value="${this._esc(d.title || '')}"></div>
+                <div class="emg"><label class="eml">Content</label><textarea id="edit-content" class="ft" rows="10">${this._esc(d.content || '')}</textarea></div>
+                <div class="emr"><div class="emg"><label class="eml">Mood</label><select id="edit-mood" class="fs"><option value="">—</option>${moodOptions}</select></div>
+                <div class="emg"><label class="eml">Tags (comma sep)</label><input type="text" id="edit-tags" class="fi" value="${(item.tags || []).join(', ')}"></div></div>
+                <div class="emg" style="display:flex;align-items:center;gap:0.5rem"><input type="checkbox" id="edit-flagged" ${item.isFlagged ? 'checked' : ''}><label for="edit-flagged" style="font-size:0.8rem">Flagged</label></div>`;
         }
         this._shadow.getElementById('edit-modal-body').innerHTML = html;
         this._shadow.getElementById('edit-modal-save').onclick = () => this._saveEdit(id);
@@ -616,11 +959,13 @@ class SovereignApp extends HTMLElement {
         const colorEl = this._shadow.getElementById('edit-color');
         const tagsEl = this._shadow.getElementById('edit-tags');
         const flaggedEl = this._shadow.getElementById('edit-flagged');
+        const moodEl = this._shadow.getElementById('edit-mood');
 
         const payload = { ...item.data };
         if (titleEl) payload.title = titleEl.value.trim() || payload.title;
         if (contentEl) payload.content = contentEl.value.trim();
         if (dueEl) payload.dueDate = dueEl.value || null;
+        if (moodEl) payload.mood = moodEl.value || null;
         const tags = tagsEl ? tagsEl.value.split(',').map(x => x.trim()).filter(Boolean) : item.tags;
         const priority = priorityEl ? priorityEl.value : item.priority;
         const color = colorEl ? colorEl.value : item.color;
@@ -747,8 +1092,157 @@ class SovereignApp extends HTMLElement {
         } catch (e) { this._log('error', 'Ledger CSV import failed:', e); alert('Import failed: ' + e.message); }
     }
 
+    /* ── Journal Export ── */
+    _exportJournalMD() {
+        const entries = this._items.filter(i => i.type === 'journal').sort((a, b) => a.timestamp - b.timestamp);
+        if (!entries.length) return;
+        let md = `# Journal — ${this._vaultName}\n\n`;
+        let currentDate = '';
+        for (const e of entries) {
+            const date = new Date(e.timestamp).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            if (date !== currentDate) { md += `\n---\n\n## ${date}\n\n`; currentDate = date; }
+            const time = new Date(e.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const mood = e.data.mood ? ` *(${e.data.mood})*` : '';
+            md += `### ${time} — ${this._esc(e.data.title || 'Untitled')}${mood}\n\n`;
+            if (e.data.content) md += `${e.data.content}\n\n`;
+            if (e.tags && e.tags.length) md += `*Tags: ${e.tags.join(', ')}*\n\n`;
+        }
+        this._download(md, `journal-${Date.now()}.md`, 'text/markdown');
+    }
+
+    _exportJournalTXT() {
+        const entries = this._items.filter(i => i.type === 'journal').sort((a, b) => a.timestamp - b.timestamp);
+        if (!entries.length) return;
+        let txt = `JOURNAL — ${this._vaultName}\n${'='.repeat(50)}\n\n`;
+        for (const e of entries) {
+            const date = new Date(e.timestamp).toLocaleString();
+            const mood = e.data.mood ? ` [${e.data.mood}]` : '';
+            txt += `${date}${mood}\n${e.data.title || 'Untitled'}\n${'-'.repeat(30)}\n`;
+            if (e.data.content) txt += `${e.data.content}\n`;
+            if (e.tags && e.tags.length) txt += `Tags: ${e.tags.join(', ')}\n`;
+            txt += '\n\n';
+        }
+        this._download(txt, `journal-${Date.now()}.txt`, 'text/plain');
+    }
+
+    _exportJournalJSON() {
+        const entries = this._items.filter(i => i.type === 'journal').map(e => ({
+            id: e.id, title: e.data.title, content: e.data.content,
+            mood: e.data.mood, date: e.data.date, tags: e.tags,
+            timestamp: e.timestamp
+        }));
+        this._download(JSON.stringify(entries, null, 2), `journal-${Date.now()}.json`, 'application/json');
+    }
+
+    /* ── Peer Chat Methods ── */
+    async _chatNewContact() {
+        try {
+            const { saveContact, generateKeyPair, exportPublicKey } = await import('../core/chat-db.js');
+            const name = prompt('Contact name:');
+            if (!name) return;
+            const id = 'contact_' + crypto.randomUUID();
+            const keyPair = await generateKeyPair();
+            const pubKey = await exportPublicKey(keyPair);
+            await saveContact({ id, name, publicKey: Array.from(new Uint8Array(pubKey)), createdAt: Date.now() });
+            this._renderChat();
+        } catch (err) { this._log('error', 'New contact failed:', err); }
+    }
+
+    async _chatNewConversation() {
+        try {
+            const { saveConversation, getAllContacts } = await import('../core/chat-db.js');
+            const contacts = await getAllContacts();
+            if (!contacts.length) {
+                alert('No contacts yet. Add a contact first.');
+                return;
+            }
+            const contactNames = contacts.map((c, i) => `${i + 1}. ${c.name}`).join('\n');
+            const choice = prompt(`Select contact:\n${contactNames}\n\nEnter number:`);
+            const idx = parseInt(choice) - 1;
+            if (isNaN(idx) || idx < 0 || idx >= contacts.length) return;
+            const contact = contacts[idx];
+            const id = 'conv_' + crypto.randomUUID();
+            await saveConversation({ id, name: contact.name, contactId: contact.id, lastActivity: Date.now() });
+            this._renderChat();
+        } catch (err) { this._log('error', 'New conversation failed:', err); }
+    }
+
+    async _chatOpenConversation(convId) {
+        try {
+            const { getConversation, getMessages, decryptData } = await import('../core/chat-db.js');
+            const conv = await getConversation(convId);
+            if (!conv) return;
+            this._currentChatConv = convId;
+            const convList = this._shadow.getElementById('chat-conversations');
+            if (convList) convList.closest('.card').style.display = 'none';
+            const msgView = this._shadow.getElementById('chat-message-view');
+            if (msgView) msgView.style.display = 'block';
+            const titleEl = this._shadow.getElementById('chat-conv-title');
+            if (titleEl) titleEl.textContent = conv.name;
+            const msgs = await getMessages(convId);
+            const msgList = this._shadow.getElementById('chat-msg-list');
+            if (msgList) {
+                // Decrypt messages
+                const chatKey = this._chatKey || this._key;
+                const decryptedMsgs = [];
+                for (const m of msgs) {
+                    let content = m.content || '[encrypted]';
+                    if (m.ciphertext && m.iv && chatKey) {
+                        try {
+                            content = await decryptData(chatKey, new Uint8Array(m.ciphertext), new Uint8Array(m.iv));
+                        } catch { content = '[decrypt failed]'; }
+                    }
+                    decryptedMsgs.push({ ...m, content });
+                }
+                msgList.innerHTML = decryptedMsgs.reverse().map(m => {
+                    const isMine = m.sender === 'me';
+                    return `<div style="text-align:${isMine ? 'right' : 'left'};margin-bottom:0.5rem">
+                        <div style="display:inline-block;max-width:80%;padding:0.5rem 0.75rem;border-radius:0.75rem;background:${isMine ? 'var(--primary)' : 'var(--s2)'};color:${isMine ? '#000' : 'var(--t1)'};font-size:0.8rem">
+                            ${this._esc(m.content || '')}
+                        </div>
+                        <div style="font-size:0.6rem;color:var(--t2);margin-top:0.125rem">${new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                    </div>`;
+                }).join('');
+                msgList.scrollTop = msgList.scrollHeight;
+            }
+        } catch (err) { this._log('error', 'Open conversation failed:', err); }
+    }
+
+    async _chatBackToList() {
+        this._currentChatConv = null;
+        const convList = this._shadow.getElementById('chat-conversations');
+        if (convList) convList.closest('.card').style.display = 'block';
+        const msgView = this._shadow.getElementById('chat-message-view');
+        if (msgView) msgView.style.display = 'none';
+        this._renderChat();
+    }
+
+    async _chatSendMessage() {
+        if (!this._currentChatConv) return;
+        const input = this._shadow.getElementById('chat-msg-input');
+        if (!input || !input.value.trim()) return;
+        try {
+            const { saveMessage, encryptData } = await import('../core/chat-db.js');
+            const content = input.value.trim();
+            // Encrypt message content before storing in chat DB
+            const chatKey = this._chatKey || this._key; // Use vault key as fallback for self-chat
+            const { ciphertext, iv } = await encryptData(chatKey, content);
+            await saveMessage({
+                id: 'msg_' + crypto.randomUUID(),
+                conversationId: this._currentChatConv,
+                sender: 'me',
+                ciphertext: Array.from(new Uint8Array(ciphertext)),
+                iv: Array.from(iv),
+                mimeType: 'text/plain',
+                timestamp: Date.now()
+            });
+            input.value = '';
+            this._chatOpenConversation(this._currentChatConv);
+        } catch (err) { this._log('error', 'Send message failed:', err); }
+    }
+
     /* ── Bind Events ── */
-    _bind() {
+    async _bind() {
         // Auth
         const pwEl = this._shadow.getElementById('auth-pw');
         if (pwEl) pwEl.addEventListener('keydown', e => { if (e.key === 'Enter') this._handleAuth(); });
@@ -815,6 +1309,143 @@ class SovereignApp extends HTMLElement {
             const la = this._shadow.getElementById('ledger-amt'); if (la) la.value = '';
             const ln = this._shadow.getElementById('ledger-notes'); if (ln) ln.value = '';
         };
+
+        // Journal
+        this._journalMood = '';
+        this._shadow.querySelectorAll('.mood-btn').forEach(btn => {
+            btn.onclick = () => {
+                this._shadow.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this._journalMood = btn.dataset.mood;
+            };
+        });
+        const addJournal = this._shadow.getElementById('add-journal');
+        if (addJournal) addJournal.onclick = () => {
+            const title = this._shadow.getElementById('journal-title')?.value.trim();
+            const content = this._shadow.getElementById('journal-body')?.value.trim();
+            if (!content && !title) return;
+            const tags = (this._shadow.getElementById('journal-tags')?.value || '').split(',').map(x => x.trim()).filter(Boolean);
+            this._seal('journal', { title: title || new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }), content, mood: this._journalMood, date: new Date().toISOString(), createdAt: Date.now() }, tags);
+            const jt = this._shadow.getElementById('journal-title'); if (jt) jt.value = '';
+            const jb = this._shadow.getElementById('journal-body'); if (jb) jb.value = '';
+            const jtags = this._shadow.getElementById('journal-tags'); if (jtags) jtags.value = '';
+            this._journalMood = '';
+            this._shadow.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('active'));
+        };
+
+        // Journal export
+        const expJournalMd = this._shadow.getElementById('exp-journal-md');
+        if (expJournalMd) expJournalMd.onclick = () => this._exportJournalMD();
+        const expJournalTxt = this._shadow.getElementById('exp-journal-txt');
+        if (expJournalTxt) expJournalTxt.onclick = () => this._exportJournalTXT();
+        const expJournalJson = this._shadow.getElementById('exp-journal-json');
+        if (expJournalJson) expJournalJson.onclick = () => this._exportJournalJSON();
+        const impJournal = this._shadow.getElementById('imp-journal');
+        if (impJournal) impJournal.onclick = () => this._shadow.getElementById('fi-journal')?.click();
+
+        // Voice input for journal
+        this._journalVoiceActive = false;
+        const journalVoice = this._shadow.getElementById('journal-voice');
+        if (journalVoice) {
+            journalVoice.onclick = () => {
+                if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                    alert('Voice input not supported in this browser.');
+                    return;
+                }
+                if (this._journalVoiceActive) {
+                    this._journalVoiceRecognition?.stop();
+                    this._journalVoiceActive = false;
+                    journalVoice.classList.remove('recording');
+                    journalVoice.textContent = '🎤 Speak';
+                    return;
+                }
+                const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+                this._journalVoiceRecognition = new SR();
+                this._journalVoiceRecognition.continuous = true;
+                this._journalVoiceRecognition.interimResults = true;
+                this._journalVoiceRecognition.lang = 'en-US';
+                this._journalVoiceRecognition.onresult = (e) => {
+                    let transcript = '';
+                    for (let i = 0; i < e.results.length; i++) {
+                        transcript += e.results[i][0].transcript;
+                    }
+                    const body = this._shadow.getElementById('journal-body');
+                    if (body) body.value = transcript;
+                };
+                this._journalVoiceRecognition.onend = () => {
+                    this._journalVoiceActive = false;
+                    journalVoice.classList.remove('recording');
+                    journalVoice.textContent = '🎤 Speak';
+                };
+                this._journalVoiceRecognition.start();
+                this._journalVoiceActive = true;
+                journalVoice.classList.add('recording');
+                journalVoice.textContent = '⏹ Stop';
+            };
+        }
+
+        // Read aloud last journal entry
+        const journalRead = this._shadow.getElementById('journal-read');
+        if (journalRead) {
+            journalRead.onclick = () => {
+                if (!('speechSynthesis' in window)) {
+                    alert('Text-to-speech not supported.');
+                    return;
+                }
+                const entries = this._items.filter(i => i.type === 'journal').sort((a, b) => b.timestamp - a.timestamp);
+                if (!entries.length) { alert('No journal entries to read.'); return; }
+                const last = entries[0];
+                const text = `${last.data.title || 'Untitled'}. ${last.data.content || ''}`;
+                window.speechSynthesis.cancel();
+                const utter = new SpeechSynthesisUtterance(text);
+                utter.rate = 0.9;
+                window.speechSynthesis.speak(utter);
+            };
+        }
+
+        // Journal import
+        const fiJournal = this._shadow.getElementById('fi-journal');
+        if (fiJournal) fiJournal.onchange = async e => {
+            if (!e.target.files[0]) return;
+            try {
+                const { createVessel } = await import('../core/crypto.js');
+                const { saveVessel } = await import('../core/db.js');
+                const data = JSON.parse(await e.target.files[0].text());
+                const entries = Array.isArray(data) ? data : [data];
+                let count = 0;
+                for (const entry of entries) {
+                    const vessel = await createVessel(this._key, 'journal', entry, entry.tags || [], 'medium', 'none');
+                    const id = entry.id || `journal_${crypto.randomUUID()}`;
+                    await saveVessel(id, vessel.ciphertext, vessel.iv, 'journal', entry.tags || []);
+                    count++;
+                }
+                await this._loadItems();
+                this._nav(this._tab);
+                alert(`Imported ${count} journal entries`);
+            } catch (err) { this._log('error', 'Journal import failed:', err); alert('Import failed: ' + err.message); }
+            e.target.value = '';
+        };
+
+        // Help modal
+        const helpBtn = this._shadow.getElementById('help-btn');
+        if (helpBtn) helpBtn.onclick = () => this._shadow.getElementById('help-modal').classList.add('show');
+        const helpClose = this._shadow.getElementById('help-close');
+        if (helpClose) helpClose.onclick = () => this._shadow.getElementById('help-modal').classList.remove('show');
+        const helpOverlay = this._shadow.getElementById('help-modal');
+        if (helpOverlay) helpOverlay.onclick = (e) => { if (e.target === helpOverlay) helpOverlay.classList.remove('show'); };
+
+        // Peer Chat (isolated from vault data)
+        this._currentChatConv = null;
+        const chatNewContact = this._shadow.getElementById('chat-new-contact');
+        if (chatNewContact) chatNewContact.onclick = () => this._chatNewContact();
+        const chatNewConv = this._shadow.getElementById('chat-new-conv');
+        if (chatNewConv) chatNewConv.onclick = () => this._chatNewConversation();
+        const chatBack = this._shadow.getElementById('chat-back');
+        if (chatBack) chatBack.onclick = () => this._chatBackToList();
+        const chatMsgSend = this._shadow.getElementById('chat-msg-send');
+        if (chatMsgSend) chatMsgSend.onclick = () => this._chatSendMessage();
+        const chatMsgInput = this._shadow.getElementById('chat-msg-input');
+        if (chatMsgInput) chatMsgInput.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.value.trim()) { this._chatSendMessage(); e.target.value = ''; } });
 
         // Calendar
         const calPrev = this._shadow.getElementById('cal-prev');
@@ -976,13 +1607,66 @@ class SovereignApp extends HTMLElement {
                 const idx = this._habits[hcb.dataset.hid].indexOf(today);
                 if (idx >= 0) this._habits[hcb.dataset.hid].splice(idx, 1);
                 else this._habits[hcb.dataset.hid].push(today);
-                try { const { setSetting } = await import('../core/db.js'); await setSetting('habitCheckins', this._habits); } catch (err) { this._log('error', 'Save habit failed:', err); }
+                try {
+                    const { setSetting } = await import('../core/db.js');
+                    const { encryptData } = await import('../core/crypto.js');
+                    const { ciphertext, iv } = await encryptData(this._key, JSON.stringify(this._habits));
+                    await setSetting('habitCheckins', { ciphertext: Array.from(new Uint8Array(ciphertext)), iv: Array.from(iv) });
+                } catch (err) { this._log('error', 'Save habit failed:', err); }
                 this._renderHabits();
             }
             const modalCancel = e.target.closest('#edit-modal-cancel');
             if (modalCancel) { this._closeEditModal(); return; }
             const modalOverlay = e.target.closest('#edit-modal-overlay');
             if (modalOverlay && e.target === modalOverlay) { this._closeEditModal(); return; }
+            // Chat conversation click
+            const chatConv = e.target.closest('[data-chat-conv]');
+            if (chatConv) { this._chatOpenConversation(chatConv.dataset.chatConv); return; }
+            // Chat conversation delete
+            const chatDelConv = e.target.closest('[data-chat-del-conv]');
+            if (chatDelConv) {
+                try {
+                    const { deleteConversation } = await import('../core/chat-db.js');
+                    await deleteConversation(chatDelConv.dataset.chatDelConv);
+                    this._renderChat();
+                } catch (err) { this._log('error', 'Delete conversation failed:', err); }
+                return;
+            }
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', e => {
+            // Ctrl/Cmd + K = Search (navigate to tasks)
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                this._nav('tasks');
+                setTimeout(() => this._shadow.getElementById('task-in')?.focus(), 100);
+            }
+            // Ctrl/Cmd + N = New task
+            if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+                e.preventDefault();
+                this._nav('tasks');
+                setTimeout(() => this._shadow.getElementById('task-in')?.focus(), 100);
+            }
+            // Ctrl/Cmd + J = Journal
+            if ((e.ctrlKey || e.metaKey) && e.key === 'j') {
+                e.preventDefault();
+                this._nav('journal');
+            }
+            // Ctrl/Cmd + L = Ledger
+            if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
+                e.preventDefault();
+                this._nav('ledger');
+            }
+            // Ctrl/Cmd + C = Calendar
+            if ((e.ctrlKey || e.metaKey) && e.key === 'c' && !e.shiftKey) {
+                e.preventDefault();
+                this._nav('calendar');
+            }
+            // Escape = Close modal
+            if (e.key === 'Escape') {
+                this._closeEditModal();
+            }
         });
     }
 
@@ -991,22 +1675,32 @@ class SovereignApp extends HTMLElement {
         this._applyTheme(0);
         this._shadow.innerHTML = `
         <style>
-        :host{display:block;--bg:#0a0a0a;--s1:#141414;--s2:#1e1e1e;--t1:#e5e5e5;--t2:#a3a3a3;--primary:#10b981;--primary-h:#0d9f6e;--danger:#ef4444;--warn:#f59e0b;--info:#3b82f6;--purple:#8b5cf6;--bdr:rgba(255,255,255,0.08);--r:0.625rem;--rl:0.875rem}
+        :host{display:block;--bg:#0a0a0a;--s1:rgba(20,20,20,0.6);--s2:rgba(30,30,30,0.8);--t1:#e5e5e5;--t2:#a3a3a3;--primary:#10b981;--primary-h:#0d9f6e;--danger:#ef4444;--warn:#f59e0b;--info:#3b82f6;--purple:#8b5cf6;--bdr:rgba(255,255,255,0.08);--r:1rem;--rl:1.25rem;--shadow-glass:0 8px 32px 0 rgba(0,0,0,0.37);--blur:backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);}
         *{margin:0;padding:0;box-sizing:border-box}
-        :host{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--t1);font-size:13px;line-height:1.5}
+        :host{font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--t1);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;}
+        .card{background:var(--s1);border:1px solid var(--bdr);border-radius:var(--rl);padding:1.5rem;box-shadow:var(--shadow-glass);var(--blur);transition:transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s;will-change:transform;}
+        .card:hover{transform:translateY(-2px);box-shadow:0 12px 40px 0 rgba(0,0,0,0.45);}
+        button{cursor:pointer;transition:all 0.2s cubic-bezier(0.4, 0, 0.2, 1);}
+        button:active{transform:scale(0.96);}
+        input,textarea,select{transition:border-color 0.2s, box-shadow 0.2s;}
+        input:focus,textarea:focus,select:focus{box-shadow:0 0 0 3px rgba(16,185,129,0.2);outline:none;}
         #auth-screen{position:fixed;inset:0;background:linear-gradient(135deg,#0a0a0a,#111827);display:flex;align-items:center;justify-content:center;z-index:10000}
-        .abox{background:var(--s1);border:1px solid var(--bdr);border-radius:1.25rem;padding:2rem;width:380px;max-width:90%;text-align:center}
-        .alogo{font-size:1.25rem;font-weight:800;display:flex;align-items:center;justify-content:center;gap:0.4rem;margin-bottom:0.25rem}
-        .adot{width:8px;height:8px;border-radius:50%;background:var(--primary);box-shadow:0 0 10px var(--primary)}
-        .asub{color:var(--primary);font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:1rem}
+        .abox{background:var(--s1);border:1px solid var(--bdr);border-radius:1.5rem;padding:2rem;width:400px;max-width:90%;text-align:center}
+        .auth-icon{margin-bottom:0.5rem}
+        .alogo{font-size:1.5rem;font-weight:800;letter-spacing:-0.02em;margin-top:0.75rem}
+        .adot{width:16px;height:16px;border-radius:50%;background:var(--primary);box-shadow:0 0 10px var(--primary)}
+        .asub{color:var(--t2);font-size:0.75rem;margin-top:0.25rem}
+        .aversion{color:var(--t2);opacity:0.4;font-size:0.6rem;font-family:monospace;margin-top:0.25rem;letter-spacing:0.05em}
         .ainp{background:rgba(0,0,0,0.4);border:1px solid #333;padding:0.75rem;border-radius:var(--r);font-size:0.85rem;width:100%;color:var(--t1);margin-bottom:0.5rem;text-align:center}
         .ainp:focus{outline:none;border-color:var(--primary)}
-        .abtn{background:var(--primary);color:#000;border:none;padding:0.75rem;border-radius:var(--r);font-size:0.85rem;font-weight:600;cursor:pointer;width:100%}
+        .abtn{background:var(--primary);color:#000;border:none;padding:0.75rem;border-radius:var(--r);font-size:0.85rem;font-weight:600;cursor:pointer;width:100%;margin-top:0.5rem}
         .abtn:hover{background:var(--primary-h)}
         .aerr{color:var(--danger);font-size:0.7rem;margin-top:0.5rem;min-height:1rem}
         .ahint{font-size:0.6rem;opacity:0.4;margin-top:0.75rem;line-height:1.5}
-        .ahint a{color:var(--primary);text-decoration:none;font-size:0.7rem}
-        .ahint a:hover{text-decoration:underline}
+        .mode-tabs{display:flex;gap:0.25rem;margin-bottom:1rem;background:rgba(0,0,0,0.2);border-radius:var(--r);padding:0.25rem}
+        .mode-tab{flex:1;padding:0.5rem;border-radius:calc(var(--r) - 0.125rem);font-size:0.8rem;font-weight:500;cursor:pointer;border:none;background:none;color:var(--t2);transition:all 0.15s}
+        .mode-tab:hover{color:var(--t1)}
+        .mode-tab.active{background:var(--primary);color:#000}
         #app{display:none;height:100vh}
         #app.on{display:flex}
         .side{width:200px;background:var(--s1);border-right:1px solid var(--bdr);display:flex;flex-direction:column;flex-shrink:0}
@@ -1141,9 +1835,24 @@ class SovereignApp extends HTMLElement {
         .prompt.reminder{background:rgba(245,158,11,0.08);border-color:rgba(245,158,11,0.2)}
         .prompt-dismiss{background:none;border:none;color:var(--t2);cursor:pointer;padding:0.125rem;font-size:0.7rem}
         .prompt-dismiss:hover{color:var(--danger)}
-        .mood-btns{display:flex;gap:0.375rem;margin-top:0.5rem}
-        .mood-btn{padding:0.375rem 0.625rem;border-radius:var(--r);font-size:0.75rem;cursor:pointer;border:1px solid var(--bdr);background:var(--s2);color:var(--t1)}
-        .mood-btn:hover{background:rgba(255,255,255,0.08)}
+        .mood-btns{display:flex;gap:0.375rem;margin-top:0.5rem;flex-wrap:wrap}
+        .mood-btn{padding:0.375rem 0.625rem;border-radius:var(--r);font-size:0.75rem;cursor:pointer;border:1px solid var(--bdr);background:var(--s2);color:var(--t1);transition:all 0.15s}
+        .mood-btn:hover{background:rgba(255,255,255,0.08);border-color:var(--primary)}
+        .mood-btn.active{border-color:var(--primary);background:rgba(16,185,129,0.15);color:var(--primary)}
+        .mood-legend{font-size:0.6rem;color:var(--t2);margin-top:0.375rem;line-height:1.6}
+        .help-modal{position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:9999}
+        .help-modal.show{display:flex}
+        .help-content{background:var(--s1);border:1px solid var(--bdr);border-radius:var(--rl);padding:1.5rem;width:560px;max-width:90%;max-height:80vh;overflow-y:auto}
+        .help-content h3{font-size:0.9rem;margin:1rem 0 0.5rem;color:var(--primary)}
+        .help-content p{font-size:0.8rem;color:var(--t2);margin-bottom:0.5rem;line-height:1.5}
+        .help-content ul{margin-left:1.25rem;margin-bottom:0.5rem}
+        .help-content li{font-size:0.75rem;color:var(--t2);margin-bottom:0.25rem}
+        .voice-btn{background:none;border:1px solid var(--bdr);color:var(--t2);padding:0.25rem 0.5rem;border-radius:var(--r);cursor:pointer;font-size:0.7rem}
+        .voice-btn:hover{background:rgba(255,255,255,0.08);color:var(--t1)}
+        .voice-btn.recording{border-color:var(--danger);color:var(--danger);animation:pulse 1.5s infinite}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+        .read-btn{background:none;border:1px solid var(--bdr);color:var(--t2);padding:0.25rem 0.5rem;border-radius:var(--r);cursor:pointer;font-size:0.7rem}
+        .read-btn:hover{background:rgba(255,255,255,0.08);color:var(--t1)}
         .mnav{display:none}
         @media (max-width:768px) {.side{display:none}.mnav{display:flex!important;position:fixed;bottom:0;left:0;right:0;background:var(--s1);border-top:1px solid var(--bdr);padding:0.375rem;gap:0.125rem;overflow-x:auto;z-index:100;padding-bottom:calc(0.375rem + env(safe-area-inset-bottom))}.mtb{flex-shrink:0;padding:0.375rem 0.5rem;border-radius:var(--r);font-size:0.6rem;color:var(--t2);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:0.125rem;background:none;border:none}.mtb.active{color:var(--primary);background:rgba(16,185,129,0.1)}.mti{font-size:1rem}.content{padding-bottom:70px}.fr{grid-template-columns:1fr}.sg{grid-template-columns:repeat(2,1fr)}}
         ::-webkit-scrollbar{width:5px}
@@ -1164,28 +1873,39 @@ class SovereignApp extends HTMLElement {
         <!-- Auth -->
         <div id="auth-screen">
             <div class="abox">
-                <div class="alogo"><div class="adot"></div> SOVEREIGN VAULT</div>
-                <div class="asub">Zero-Knowledge Encrypted Workspace</div>
+                <div class="auth-icon"><div class="adot" style="width:32px;height:32px;border-radius:50%;background:rgba(16,185,129,0.1);display:flex;align-items:center;justify-content:center"><div class="adot" style="width:16px;height:16px"></div></div></div>
+                <div class="alogo" style="font-size:1.5rem;margin-top:0.75rem">Vault Tracker</div>
+                <div class="asub">Zero-Trust Encrypted Workspace</div>
+                <div class="aversion">v2.0 Sovereign Edition</div>
                 <div id="auth-mode" data-mode="unlock">
+                    <!-- Mode Tabs -->
+                    <div class="mode-tabs">
+                        <button class="mode-tab active" data-mode="unlock" onclick="this.getRootNode().host._setAuthMode('unlock')">Unlock</button>
+                        <button class="mode-tab" data-mode="create" onclick="this.getRootNode().host._setAuthMode('create')">Create</button>
+                        <button class="mode-tab" data-mode="delete" onclick="this.getRootNode().host._setAuthMode('delete')">Delete</button>
+                    </div>
+                    <!-- Vault Selector (unlock/delete) -->
                     <div id="vault-select-group">
                         <label class="fl">Select Vault</label>
-                        <select id="vault-select" class="fi" style="font-size:0.75rem;margin-bottom:0.5rem"></select>
+                        <select id="vault-select" class="fi" style="font-size:0.8rem;margin-bottom:0.5rem"></select>
                     </div>
+                    <!-- Vault Name (create) -->
                     <div id="vault-name-group" style="display:none">
                         <label class="fl">Vault Name</label>
-                        <input type="text" id="vault-name-input" class="fi" style="font-size:0.75rem;margin-bottom:0.5rem" placeholder="e.g. Personal">
+                        <input type="text" id="vault-name-input" class="fi" style="font-size:0.8rem;margin-bottom:0.5rem" placeholder="e.g. Personal">
                     </div>
+                    <!-- Password -->
                     <label class="fl" id="auth-pw-label">Master Password</label>
-                    <input type="password" id="auth-pw" class="ainp" placeholder="Master Password" autofocus>
+                    <input type="password" id="auth-pw" class="ainp" placeholder="Enter your master password" autofocus>
+                    <!-- Biometrics (future) -->
+                    <div class="bio-row" id="bio-row" style="display:none">
+                        <input type="checkbox" id="enable-bio"> <label for="enable-bio" style="font-size:0.75rem;color:var(--t2)">Enable biometric login (future)</label>
+                    </div>
+                    <!-- Submit -->
                     <button id="auth-submit" class="abtn">Unlock Vault</button>
                 </div>
-                <div id="vault-dna" style="margin-top:0.5rem"></div>
+                <div id="vault-dna" style="margin-top:0.75rem"></div>
                 <div id="auth-err" class="aerr"></div>
-                <div class="ahint" style="margin-top:1rem">
-                    <a href="#" id="create-link">Create new vault</a>
-                    <a href="#" id="back-link" style="display:none">Back to unlock</a>
-                    <a href="#" id="delete-link" style="display:none;color:var(--danger)">Delete vault</a>
-                </div>
                 <div class="ahint">Encryption happens locally. No data leaves your device.<br>No password recovery possible.</div>
             </div>
         </div>
@@ -1199,26 +1919,28 @@ class SovereignApp extends HTMLElement {
                     <button class="tab-btn" data-tab="notes"><span class="ti">📝</span>Notes</button>
                     <button class="tab-btn" data-tab="habits"><span class="ti">🔄</span>Habits</button>
                     <button class="tab-btn" data-tab="ledger"><span class="ti">💰</span>Ledger</button>
+                    <button class="tab-btn" data-tab="journal"><span class="ti">📔</span>Journal</button>
                     <div class="nsec">Views</div>
                     <button class="tab-btn" data-tab="calendar"><span class="ti">📅</span>Calendar</button>
                     <button class="tab-btn" data-tab="analytics"><span class="ti">📊</span>Analytics</button>
                     <div class="nsec">System</div>
+                    <button class="tab-btn" data-tab="chat"><span class="ti">💬</span>Chat</button>
                     <button class="tab-btn" data-tab="companion"><span class="ti">🤖</span>Companion</button>
                     <button class="tab-btn" data-tab="settings"><span class="ti">⚙️</span>Settings</button>
                 </nav>
                 <div class="sf">
-                    <button class="sfb" id="exp-json">📤 Export JSON</button>
-                    <button class="sfb" id="imp-json">📥 Import JSON</button>
-                    <button class="sfb" id="imp-csv">📥 Import CSV</button>
-                    <button class="sfb" id="imp-ics">📥 Import ICS</button>
-                    <button class="sfb" id="exp-ledger">📤 Ledger CSV</button>
-                    <button class="sfb" id="imp-ledger">📥 Ledger CSV</button>
-                    <button class="sfb dng" id="lock-btn">🔒 Lock</button>
-                    <button class="sfb dng" id="delete-vault-btn">🗑️ Delete Vault</button>
+                    <button class="sfb" id="exp-json" title="Export all vault data as JSON">📤 Export JSON</button>
+                    <button class="sfb" id="imp-json" title="Import vault data from JSON file">📥 Import JSON</button>
+                    <button class="sfb" id="imp-csv" title="Import vault data from CSV file">📥 Import CSV</button>
+                    <button class="sfb" id="imp-ics" title="Import calendar events from ICS file">📥 Import ICS</button>
+                    <button class="sfb" id="exp-ledger" title="Export ledger transactions as CSV">📤 Ledger CSV</button>
+                    <button class="sfb" id="imp-ledger" title="Import ledger transactions from CSV">📥 Ledger CSV</button>
+                    <button class="sfb dng" id="lock-btn" title="Lock vault — requires password to unlock">🔒 Lock</button>
+                    <button class="sfb dng" id="delete-vault-btn" title="Permanently delete a vault and all its data">🗑️ Delete Vault</button>
                 </div>
             </aside>
             <div class="main">
-                <header class="top"><div class="tt" id="title">Tasks</div><div class="ta"><button class="tb" id="theme-btn">🎨</button></div></header>
+                <header class="top"><div class="tt" id="title">Tasks</div><div class="ta"><button class="tb" id="help-btn" title="Help & Documentation">❓</button><button class="tb" id="theme-btn" title="Cycle through 5 themes">🎨</button></div></header>
                 <div class="content">
                     <!-- Tasks -->
                     <div class="mod active" data-mod="tasks">
@@ -1226,7 +1948,7 @@ class SovereignApp extends HTMLElement {
                             <div class="fg"><input type="text" id="task-in" class="fi" placeholder="New task..."></div>
                             <div class="fr"><div class="fg"><label class="fl">Due</label><input type="datetime-local" id="task-due" class="fi"></div><div class="fg"><label class="fl">Priority</label><select id="task-pri" class="fs"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option><option value="critical">Critical</option></select></div></div>
                             <div class="fg"><input type="text" id="task-tags" class="fi" placeholder="Tags (comma sep)"></div>
-                            <button class="btn bp" id="add-task">+ Add Task</button>
+                            <button class="btn bp" id="add-task" title="Add a new task">+ Add Task</button>
                         </div>
                         <div class="sg" id="task-stats"></div>
                         <div class="il" id="task-list"></div>
@@ -1237,7 +1959,7 @@ class SovereignApp extends HTMLElement {
                             <div class="fg"><input type="text" id="note-title" class="fi" placeholder="Note title..."></div>
                             <div class="fg"><textarea id="note-body" class="ft" rows="5" placeholder="Write..."></textarea></div>
                             <div class="fg"><input type="text" id="note-tags" class="fi" placeholder="Tags (comma sep)"></div>
-                            <button class="btn bp" id="add-note">+ Save Note</button>
+                            <button class="btn bp" id="add-note" title="Save a new note">+ Save Note</button>
                         </div>
                         <div class="il" id="note-list"></div>
                     </div>
@@ -1246,7 +1968,7 @@ class SovereignApp extends HTMLElement {
                         <div class="card">
                             <div class="fg"><input type="text" id="habit-in" class="fi" placeholder="New habit..."></div>
                             <div class="fg"><select id="habit-pri" class="fs"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></div>
-                            <button class="btn bp" id="add-habit">+ Add Habit</button>
+                            <button class="btn bp" id="add-habit" title="Track a new habit">+ Add Habit</button>
                         </div>
                         <div id="habit-list"></div>
                     </div>
@@ -1258,13 +1980,46 @@ class SovereignApp extends HTMLElement {
                             <div class="fr"><div class="fg"><label class="fl">Amount</label><input type="number" id="ledger-amt" class="fi" placeholder="0.00" step="0.01"></div><div class="fg"><label class="fl">Type</label><select id="ledger-type" class="fs"><option value="credit">Credit (Income)</option><option value="debit">Debit (Expense)</option></select></div></div>
                             <div class="fr"><div class="fg"><label class="fl">Category</label><select id="ledger-cat" class="fs"><option value="general">General</option><option value="food">Food</option><option value="transport">Transport</option><option value="housing">Housing</option><option value="utilities">Utilities</option><option value="health">Health</option><option value="entertainment">Entertainment</option><option value="shopping">Shopping</option><option value="education">Education</option><option value="salary">Salary</option><option value="investment">Investment</option></select></div><div class="fg"><label class="fl">Classification</label><select id="ledger-cls" class="fs"><option value="need">Need</option><option value="want">Want</option></select></div></div>
                             <div class="fg"><input type="text" id="ledger-notes" class="fi" placeholder="Notes..."></div>
-                            <div style="display:flex;gap:0.375rem;flex-wrap:wrap"><button class="btn bp" id="add-ledger">+ Add</button><button class="btn bs" id="exp-ledger">📤 Export CSV</button><button class="btn bs" id="imp-ledger">📥 Import CSV</button></div>
+                            <div style="display:flex;gap:0.375rem;flex-wrap:wrap"><button class="btn bp" id="add-ledger" title="Add a new transaction">+ Add</button><button class="btn bs" id="exp-ledger" title="Export ledger as CSV">📤 Export CSV</button><button class="btn bs" id="imp-ledger" title="Import ledger from CSV">📥 Import CSV</button></div>
                         </div>
-                        <div style="overflow-x:auto"><table class="lt"><thead><tr><th>Date</th><th>Category</th><th>Type</th><th>Description</th><th>Debit</th><th>Credit</th><th>Balance</th><th></th></tr></thead><tbody id="ledger-tbody"></tbody></table></div>
-                    </div>
-                    <!-- Calendar -->
+                     <div style="overflow-x:auto"><table class="lt"><thead><tr><th>Date</th><th>Category</th><th>Type</th><th>Description</th><th>Debit</th><th>Credit</th><th>Balance</th><th></th></tr></thead><tbody id="ledger-tbody"></tbody></table></div>
+                     </div>
+                     <!-- Journal -->
+                     <div class="mod" data-mod="journal">
+                         <div class="card">
+                             <div style="font-size:0.75rem;color:var(--t2);margin-bottom:0.5rem" id="journal-prompt">"How are you feeling today?"</div>
+                              <div class="fg"><input type="text" id="journal-title" class="fi" placeholder="Entry title (optional)..."></div>
+                              <div class="fg"><textarea id="journal-body" class="ft" rows="6" placeholder="Write freely... This is your private space."></textarea></div>
+                              <div class="fg">
+                                  <label class="fl">How are you feeling?</label>
+                                  <div class="mood-btns" id="journal-mood-selector">
+                                      <button class="mood-btn" data-mood="good" title="Feeling positive and happy">😊 Good</button>
+                                      <button class="mood-btn" data-mood="okay" title="Neutral, neither great nor bad">😐 Okay</button>
+                                      <button class="mood-btn" data-mood="sad" title="Feeling down or low">😔 Sad</button>
+                                      <button class="mood-btn" data-mood="stressed" title="Overwhelmed or anxious">😤 Stressed</button>
+                                      <button class="mood-btn" data-mood="grateful" title="Thankful for something">🙏 Grateful</button>
+                                      <button class="mood-btn" data-mood="hopeful" title="Optimistic about the future">🌟 Hopeful</button>
+                                      <button class="mood-btn" data-mood="peaceful" title="Calm and at ease">🧘 Peaceful</button>
+                                  </div>
+                                  <div class="mood-legend">💡 Tap a mood to tag this entry. You can change it anytime. Moods help track your emotional patterns over time.</div>
+                              </div>
+                              <div class="fg"><input type="text" id="journal-tags" class="fi" placeholder="Tags (comma sep)"></div>
+                              <div style="display:flex;gap:0.375rem;flex-wrap:wrap">
+                                  <button class="btn bp" id="add-journal" title="Save this journal entry">+ Save Entry</button>
+                                  <button class="voice-btn" id="journal-voice" title="Speak to journal — voice input">🎤 Speak</button>
+                                  <button class="read-btn" id="journal-read" title="Read last entry aloud">🔊 Read</button>
+                                  <button class="btn bs" id="exp-journal-md" title="Export journal as Markdown">📤 MD</button>
+                                  <button class="btn bs" id="exp-journal-txt" title="Export journal as plain text">📤 TXT</button>
+                                  <button class="btn bs" id="exp-journal-json" title="Export journal as JSON backup">📤 JSON</button>
+                                  <button class="btn bs" id="imp-journal" title="Import journal entries from JSON">📥 Import</button>
+                              </div>
+                         </div>
+                         <div class="sg" id="journal-stats"></div>
+                         <div class="il" id="journal-list"></div>
+                     </div>
+                     <!-- Calendar -->
                     <div class="mod" data-mod="calendar">
-                        <div class="chd"><div class="cn"><button class="btn bs" id="cal-prev">◀</button><button class="btn bs" id="cal-today">Today</button><button class="btn bs" id="cal-next">▶</button><span class="ctitle" id="cal-title"></span></div><div style="display:flex;align-items:center"><div class="cv"><button class="cv-btn active" data-cv="month">Month</button><button class="cv-btn" data-cv="week">Week</button><button class="cv-btn" data-cv="workweek">Work Week</button><button class="cv-btn" data-cv="day">Day</button><button class="cv-btn" data-cv="schedule">Schedule</button></div><select id="cal-filter" class="cf"><option value="all">All</option><option value="task">Tasks</option><option value="note">Notes</option><option value="habit">Habits</option><option value="ledger">Ledger</option></select></div></div>
+                        <div class="chd"><div class="cn"><button class="btn bs" id="cal-prev" title="Previous">◀</button><button class="btn bs" id="cal-today" title="Go to today">Today</button><button class="btn bs" id="cal-next" title="Next">▶</button><span class="ctitle" id="cal-title"></span></div><div style="display:flex;align-items:center"><div class="cv"><button class="cv-btn active" data-cv="month" title="Month view">Month</button><button class="cv-btn" data-cv="week" title="Week view">Week</button><button class="cv-btn" data-cv="workweek" title="Work week (Mon-Fri)">Work Week</button><button class="cv-btn" data-cv="day" title="Day timeline">Day</button><button class="cv-btn" data-cv="schedule" title="Chronological list">Schedule</button></div><select id="cal-filter" class="cf" title="Filter by type"><option value="all">All</option><option value="task">Tasks</option><option value="note">Notes</option><option value="habit">Habits</option><option value="ledger">Ledger</option><option value="journal">Journal</option></select></div></div>
                         <div id="cal-view"></div>
                     </div>
                     <!-- Analytics -->
@@ -1273,13 +2028,38 @@ class SovereignApp extends HTMLElement {
                         <div class="card"><div style="font-size:0.8rem;font-weight:600;margin-bottom:0.5rem">Priority</div><div class="cb" id="chart-priority"></div></div>
                         <div class="card"><div style="font-size:0.8rem;font-weight:600;margin-bottom:0.5rem">Needs vs Wants</div><div id="chart-behavioral"></div></div>
                         <div class="card"><div style="font-size:0.8rem;font-weight:600;margin-bottom:0.5rem">Insights</div><div id="insights"></div></div>
-                    </div>
-                    <!-- Companion -->
+                     </div>
+                     <!-- Peer Chat -->
+                     <div class="mod" data-mod="chat">
+                         <div class="card">
+                             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+                                 <div style="font-size:0.8rem;font-weight:600">💬 Peer Chat</div>
+                                 <div style="display:flex;gap:0.375rem">
+                                     <button class="btn bs" id="chat-new-contact">+ Contact</button>
+                                     <button class="btn bs" id="chat-new-conv">+ Chat</button>
+                                 </div>
+                             </div>
+                             <div class="il" id="chat-conversations"></div>
+                         </div>
+                         <div class="card" id="chat-message-view" style="display:none">
+                             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+                                 <div style="font-size:0.8rem;font-weight:600" id="chat-conv-title"></div>
+                                 <button class="btn bs" id="chat-back">← Back</button>
+                             </div>
+                             <div class="cms" id="chat-msg-list" style="max-height:300px;overflow-y:auto"></div>
+                             <div class="cir">
+                                 <input type="text" id="chat-msg-input" class="ci2" placeholder="Type a message...">
+                                 <button class="btn bp bs" id="chat-msg-send">Send</button>
+                                 <button class="btn bs" id="chat-msg-attach" title="Attach file">📎</button>
+                             </div>
+                         </div>
+                     </div>
+                     <!-- Companion -->
                     <div class="mod" data-mod="companion">
                         <div class="card cc">
                             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem"><div style="font-size:0.8rem;font-weight:600;color:var(--primary)">🤖 Companion</div><div style="font-size:0.6rem;color:var(--t2)">● Online</div></div>
                             <div class="cms" id="chat-msgs"><div class="cm"><div class="cb2">[Companion]</div><div class="ct">I live 100% locally. Try: "Task buy groceries", "Expense 20 for lunch", "Security audit". Separate multiple commands with semicolons.</div></div></div>
-                            <div class="cir"><input type="text" id="chat-in" class="ci2" placeholder="Type a command..."><button class="btn bp bs" id="chat-send">Send</button></div>
+                            <div class="cir"><input type="text" id="chat-in" class="ci2" placeholder="Type a command..."><button class="btn bp bs" id="chat-send" title="Send command to companion">Send</button></div>
                         </div>
                     </div>
                     <!-- Settings -->
@@ -1295,12 +2075,12 @@ class SovereignApp extends HTMLElement {
                             <div style="font-size:0.65rem;color:var(--t2);margin-top:0.5rem" id="personality-desc">Sharp, direct, efficient. Blue tones. Zero fluff.</div>
                         </div>
                         <div class="card"><div style="font-size:0.8rem;font-weight:600;margin-bottom:0.75rem">Data Retention</div>
-                            <div class="sr"><div><div class="srl">History Limit</div><div class="srd">Max version snapshots per item</div></div><input type="number" id="set-history" class="fi" style="width:70px" value="5" min="1" max="50"></div>
-                            <div class="sr"><div><div class="srl">Retention Days</div><div class="srd">Days to keep history</div></div><input type="number" id="set-retention" class="fi" style="width:70px" value="30" min="1" max="365"></div>
-                            <div class="sr"><div><div class="srl">Auto-Archive</div></div><button class="tog" id="set-archive"></button></div>
+                            <div class="sr"><div><div class="srl">History Limit</div><div class="srd">How many previous versions of each item to keep. Higher = more backup, more storage. Default: 5.</div></div><input type="number" id="set-history" class="fi" style="width:70px" value="5" min="1" max="50"></div>
+                            <div class="sr"><div><div class="srl">Retention Days</div><div class="srd">How many days to keep old history entries. After this, old versions are purged. Default: 30 days.</div></div><input type="number" id="set-retention" class="fi" style="width:70px" value="30" min="1" max="365"></div>
+                            <div class="sr"><div><div class="srl">Auto-Archive Completed</div><div class="srd">Automatically move completed tasks to archive after 30 days. They stay encrypted and restorable.</div></div><button class="tog" id="set-archive" title="Toggle auto-archive for completed tasks"></button></div>
                         </div>
                         <div class="card"><div style="font-size:0.8rem;font-weight:600;margin-bottom:0.75rem">Export / Import</div>
-                            <div style="display:flex;gap:0.375rem;flex-wrap:wrap"><button class="btn bs" id="exp-json2">📤 JSON</button><button class="btn bs" id="exp-csv2">📤 CSV</button><button class="btn bs" id="exp-txt2">📤 TXT</button><button class="btn bs" id="imp-json2">📥 JSON</button><button class="btn bs" id="imp-csv2">📥 CSV</button><button class="btn bs" id="imp-ics2">📥 ICS</button></div>
+                            <div style="display:flex;gap:0.375rem;flex-wrap:wrap"><button class="btn bs" id="exp-json2" title="Export all vault data as JSON">📤 JSON</button><button class="btn bs" id="exp-csv2" title="Export all vault data as CSV">📤 CSV</button><button class="btn bs" id="exp-txt2" title="Export all vault data as plain text">📤 TXT</button><button class="btn bs" id="imp-json2" title="Import vault data from JSON">📥 JSON</button><button class="btn bs" id="imp-csv2" title="Import vault data from CSV">📥 CSV</button><button class="btn bs" id="imp-ics2" title="Import calendar events from ICS">📥 ICS</button></div>
                         </div>
                         <div class="card"><div style="font-size:0.8rem;font-weight:600;margin-bottom:0.75rem">Security</div>
                             <div class="sr"><div><div class="srl">Vault Items</div><div class="srd" id="item-count">0 vessels</div></div></div>
@@ -1314,9 +2094,11 @@ class SovereignApp extends HTMLElement {
                 <button class="mtb tab-btn" data-tab="notes"><span class="mti">📝</span>Notes</button>
                 <button class="mtb tab-btn" data-tab="habits"><span class="mti">🔄</span>Habits</button>
                 <button class="mtb tab-btn" data-tab="ledger"><span class="mti">💰</span>Ledger</button>
+                <button class="mtb tab-btn" data-tab="journal"><span class="mti">📔</span>Journal</button>
                 <button class="mtb tab-btn" data-tab="calendar"><span class="mti">📅</span>Cal</button>
                 <button class="mtb tab-btn" data-tab="analytics"><span class="mti">📊</span>Stats</button>
                 <button class="mtb tab-btn" data-tab="companion"><span class="mti">🤖</span>Chat</button>
+                <button class="mtb tab-btn" data-tab="chat"><span class="mti">💬</span>Chat</button>
                 <button class="mtb tab-btn" data-tab="settings"><span class="mti">⚙️</span>Set</button>
             </nav>
         </div>
@@ -1333,7 +2115,44 @@ class SovereignApp extends HTMLElement {
         <input type="file" id="fi-json" accept=".json" style="display:none">
         <input type="file" id="fi-csv" accept=".csv" style="display:none">
         <input type="file" id="fi-ics" accept=".ics" style="display:none">
-        <input type="file" id="fi-ledger" accept=".csv" style="display:none">`;
+        <input type="file" id="fi-ledger" accept=".csv" style="display:none">
+        <input type="file" id="fi-journal" accept=".json" style="display:none">
+
+        <!-- Help Modal -->
+        <div class="help-modal" id="help-modal">
+            <div class="help-content">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+                    <div style="font-size:1rem;font-weight:600">📖 Sovereign Vault Help</div>
+                    <button class="ab del" id="help-close" title="Close help">✕</button>
+                </div>
+                <h3>🔐 Vault</h3>
+                <p>Your vault is encrypted with AES-256-GCM. Your password never leaves your device. No one — not even us — can read your data.</p>
+                <ul><li><strong>Create Vault:</strong> Click "Create new vault" on the login screen</li><li><strong>Lock:</strong> Click 🔒 Lock in the sidebar — your key is wiped from memory</li><li><strong>Delete:</strong> Permanently removes a vault and all its encrypted data</li></ul>
+                <h3>📋 Tasks</h3>
+                <p>Track what needs to be done. Click ✎ to edit any field. Click ✓ to complete.</p>
+                <h3>📝 Notes</h3>
+                <p>Capture ideas, information, or thoughts. Fully encrypted and searchable.</p>
+                <h3>🔄 Habits</h3>
+                <p>Build consistency. Click ✓ daily to track streaks. The app tracks how many days in a row.</p>
+                <h3>💰 Ledger</h3>
+                <p>Track income and expenses. <strong>Credit</strong> = money in. <strong>Debit</strong> = money out. Running balance shows your net worth.</p>
+                <h3>📔 Journal</h3>
+                <p>Your private space for unstructured thoughts. Select a mood to track emotional patterns. Use 🎤 Speak for voice input. Use 🔊 Read to hear your last entry aloud.</p>
+                <h3>📅 Calendar</h3>
+                <p>See all your data on a timeline. Filter by type. All dates use UTC internally — no timezone bugs.</p>
+                <h3>📊 Analytics</h3>
+                <p>Monthly reflections, priority charts, spending patterns, and ecosystem insights.</p>
+                <h3>💬 Peer Chat</h3>
+                <p>End-to-end encrypted messaging. Completely isolated from your vault data. Add contacts, start conversations, share files.</p>
+                <h3>⌨️ Keyboard Shortcuts</h3>
+                <ul><li><strong>Ctrl+K</strong> — Search / Go to Tasks</li><li><strong>Ctrl+N</strong> — New Task</li><li><strong>Ctrl+J</strong> — Journal</li><li><strong>Ctrl+L</strong> — Ledger</li><li><strong>Ctrl+C</strong> — Calendar</li><li><strong>Escape</strong> — Close modal</li></ul>
+                <h3>🎭 Personalities</h3>
+                <p>Choose how the app speaks to you: Zen 🧘 (calm), Focus 🎯 (direct), Playful 🎉 (fun), Professional 💼 (formal), Energy ⚡ (motivating).</p>
+                <h3>🔒 Security</h3>
+                <p>600K PBKDF2 iterations. Non-extractable keys. OPFS sandboxed storage. Zero-knowledge by design.</p>
+            </div>
+        </div>
+`;
     }
 }
 

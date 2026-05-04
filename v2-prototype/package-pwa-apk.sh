@@ -38,21 +38,26 @@ mkdir "$WRAPPER_DIR"
 cd "$WRAPPER_DIR"
 
 echo "  -> Initializing npm wrapper..."
-npm init -y > /dev/null 2>&1
+echo '{"name":"apk-wrapper","version":"1.0.0"}' > package.json
 
 echo "  -> Installing Capacitor dependencies locally..."
-npm install @capacitor/core > /dev/null 2>&1
-npm install -D @capacitor/cli @capacitor/android > /dev/null 2>&1
+npm install @capacitor/core
+npm install -D @capacitor/cli @capacitor/android
 
 echo "  -> Initializing Capacitor Web-to-Mobile..."
-npx cap init "Sovereign Vault" "com.sovereign.vault" --web-dir ../ > /dev/null 2>&1
+npx cap init "Sovereign Vault" "com.sovereign.vault" --web-dir www
+
+echo "  -> Assembling Web Dist..."
+mkdir www
+# Copy everything inside v2-prototype EXCEPT the wrapper itself and the script
+rsync -av --exclude='.apk-wrapper' --exclude='package-pwa-apk.sh' ../ ./www/
 
 echo "  -> Attaching Android platform bindings..."
-npx cap add android > /dev/null 2>&1
+npx cap add android
 
 # Disable Capacitor sync from failing on missing standard web folder, sync it explicitly
 echo "  -> Syncing static assets into Android shell..."
-npx cap sync android > /dev/null 2>&1
+npx cap sync android
 
 cd ..
 

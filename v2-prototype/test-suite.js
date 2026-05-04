@@ -368,6 +368,82 @@ test('Intelligence engine exists', () => {
     assert(f.includes('quickChips'), 'Should have quick chips');
 });
 
+test('Service broker exists', () => {
+    const f = readFileSync(join(ROOT, 'core/broker.js'), 'utf8');
+    assert(f.includes('ServiceBroker'), 'Should have ServiceBroker class');
+    assert(f.includes('register'), 'Should have register method');
+    assert(f.includes('call'), 'Should have call method');
+    assert(f.includes('emit'), 'Should have emit method');
+    assert(f.includes('on'), 'Should have on method');
+});
+
+test('Chat database exists (isolated)', () => {
+    const f = readFileSync(join(ROOT, 'core/chat-db.js'), 'utf8');
+    assert(f.includes('sovereign-chat-v1'), 'Should have separate chat DB name');
+    assert(f.includes('conversations'), 'Should have conversations store');
+    assert(f.includes('messages'), 'Should have messages store');
+    assert(f.includes('contacts'), 'Should have contacts store');
+    assert(f.includes('attachments'), 'Should have attachments store');
+    assert(f.includes('generateKeyPair'), 'Should have E2E key generation');
+    assert(f.includes('encryptMessage'), 'Should have message encryption');
+    assert(f.includes('decryptMessage'), 'Should have message decryption');
+});
+
+test('Journal module in SovereignApp', () => {
+    const f = readFileSync(join(ROOT, 'ui/SovereignApp.js'), 'utf8');
+    assert(f.includes('journal'), 'Should have journal module');
+    assert(f.includes('journalPrompts'), 'Should have journal prompts');
+    assert(f.includes('_renderJournal'), 'Should have journal render method');
+    assert(f.includes('_exportJournalMD'), 'Should have journal MD export');
+    assert(f.includes('_exportJournalTXT'), 'Should have journal TXT export');
+    assert(f.includes('_exportJournalJSON'), 'Should have journal JSON export');
+    assert(f.includes('journal-mood-selector'), 'Should have mood selector');
+});
+
+test('Peer chat module in SovereignApp', () => {
+    const f = readFileSync(join(ROOT, 'ui/SovereignApp.js'), 'utf8');
+    assert(f.includes('data-tab="chat"'), 'Should have chat tab');
+    assert(f.includes('data-mod="chat"'), 'Should have chat module');
+    assert(f.includes('_renderChat'), 'Should have chat render method');
+    assert(f.includes('_chatSendMessage'), 'Should have chat send method');
+    assert(f.includes('_chatOpenConversation'), 'Should have chat conversation method');
+    assert(f.includes('_chatNewContact'), 'Should have new contact method');
+    assert(f.includes('_chatNewConversation'), 'Should have new conversation method');
+});
+
+test('Keyboard shortcuts in SovereignApp', () => {
+    const f = readFileSync(join(ROOT, 'ui/SovereignApp.js'), 'utf8');
+    assert(f.includes('keydown'), 'Should have keyboard listener');
+    assert(f.includes("key === 'k'"), 'Should have Ctrl+K shortcut');
+    assert(f.includes("key === 'n'"), 'Should have Ctrl+N shortcut');
+    assert(f.includes("key === 'j'"), 'Should have Ctrl+J shortcut');
+    assert(f.includes("key === 'l'"), 'Should have Ctrl+L shortcut');
+    assert(f.includes("key === 'c'"), 'Should have Ctrl+C shortcut');
+    assert(f.includes("key === 'Escape'"), 'Should have Escape shortcut');
+});
+
+test('Monthly reflection in analytics', () => {
+    const f = readFileSync(join(ROOT, 'ui/SovereignApp.js'), 'utf8');
+    assert(f.includes('monthAgo'), 'Should have monthly reflection');
+    assert(f.includes('monthTasks'), 'Should track monthly tasks');
+    assert(f.includes('monthJournal'), 'Should track monthly journal entries');
+});
+
+test('Morning/evening companion prompts', () => {
+    const f = readFileSync(join(ROOT, 'ui/SovereignApp.js'), 'utf8');
+    assert(f.includes('hour >= 8 && hour <= 10'), 'Should have morning prompts');
+    assert(f.includes('hour >= 17 && hour <= 19'), 'Should have evening prompts');
+    assert(f.includes('Weekly Summary'), 'Should have weekly summary');
+});
+
+test('OPFS primary storage', () => {
+    const f = readFileSync(join(ROOT, 'core/db.js'), 'utf8');
+    assert(f.includes('getDirectory'), 'Should use OPFS getDirectory');
+    assert(f.includes('opfsRoot'), 'Should have OPFS root reference');
+    assert(f.includes('getFileHandle'), 'Should use OPFS file handles');
+    assert(f.includes('requestPersistence'), 'Should request persistent storage');
+});
+
 // ── Results ──
 console.log(`\n${'═'.repeat(50)}`);
 console.log(`Results: ${passed}/${total} passed, ${failed} failed`);

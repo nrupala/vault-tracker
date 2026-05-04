@@ -1,12 +1,11 @@
 /**
  * Sovereign Core v2.0 - Fort Knox Storage Engine
- * OPFS (Origin Private File System) as PRIMARY storage.
- * IndexedDB as FALLBACK for browsers without OPFS.
- * navigator.storage.persist() for anti-eviction.
  * 
- * OPFS is sandboxed, invisible to users, invisible to DevTools,
- * and only accessible by this origin. Combined with AES-256-GCM
- * encryption, this is military-grade local storage.
+ * Architecture (per Master Plan):
+ * - OPFS is PRIMARY for ALL data (vaults, vessels, settings)
+ * - IndexedDB is FALLBACK only (browsers without OPFS)
+ * - Auto-migration: IndexedDB → OPFS on first OPFS init
+ * - navigator.storage.persist() prevents auto-deletion
  */
 
 let opfsRoot = null;
@@ -21,10 +20,6 @@ function log(level, msg, err) {
     else console.log('[DB]', msg);
 }
 
-/**
- * Request persistent storage to prevent browser auto-deletion.
- * Called once per session.
- */
 async function requestPersistence() {
     if (persisted) return true;
     try {
@@ -32,43 +27,26 @@ async function requestPersistence() {
             persisted = await navigator.storage.persist();
             log('info', `Persistent storage: ${persisted ? 'GRANTED' : 'DENIED'}`);
         }
-    } catch (err) {
-        log('warn', 'Persistence request failed', err);
-    }
+    } catch (err) { log('warn', 'Persistence request failed', err); }
     return persisted;
 }
 
-/**
- * Initialize OPFS as primary storage.
- * OPFS is sandboxed, hidden, and only accessible by this origin.
- */
 async function initOPFS() {
     try {
-        if (!navigator.storage || !navigator.storage.getDirectory) {
-            log('warn', 'OPFS not supported, falling back to IndexedDB');
-            return false;
-        }
+        if (!navigator.storage || !navigator.storage.getDirectory) return false;
         opfsRoot = await navigator.storage.getDirectory();
-        // Create vaults directory if it doesn't exist
-        try {
-            await opfsRoot.getDirectoryHandle('vaults', { create: true });
-        } catch { /* already exists */ }
-        try {
-            await opfsRoot.getDirectoryHandle('vessels', { create: true });
-        } catch { /* already exists */ }
+        try { await opfsRoot.getDirectoryHandle('vessels', { create: true }); } catch {}
+        try { await opfsRoot.getDirectoryHandle('vaults', { create: true }); } catch {}
+        try { await opfsRoot.getDirectoryHandle('settings', { create: true }); } catch {}
         dbMode = 'opfs';
-        log('info', 'OPFS initialized (sandboxed, hidden, persistent)');
+        log('info', 'OPFS initialized (PRIMARY storage)');
         return true;
-    } catch (err) {
-        log('warn', 'OPFS init failed, falling back to IndexedDB', err);
-        return false;
-    }
+    } catch (err) { log('warn', 'OPFS init failed', err); return false; }
 }
 
-/* ── IndexedDB Fallback ── */
 function openIDB() {
     return new Promise((resolve, reject) => {
-        const req = indexedDB.open('sovereign-vault-v2', 3);
+        const req = indexedDB.open('sovereign-vault-v2', 4);
         req.onupgradeneeded = () => {
             const d = req.result;
             if (!d.objectStoreNames.contains('vessels')) d.createObjectStore('vessels', { keyPath: 'id' });
@@ -80,68 +58,51 @@ function openIDB() {
     });
 }
 
-function idbTx(store, mode = 'readonly') {
-    return idb.transaction(store, mode).objectStore(store);
-}
+function idbTx(store, mode = 'readonly') { return idb.transaction(store, mode).objectStore(store); }
+function idbGetAll(store) { return new Promise((resolve, reject) => { const req = idbTx(store).getAll(); req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error); }); }
+function idbPut(store, data) { return new Promise((resolve, reject) => { const req = idbTx(store, 'readwrite').put(data); req.onsuccess = () => resolve(); req.onerror = () => reject(req.error); }); }
+function idbDelete(store, key) { return new Promise((resolve, reject) => { const req = idbTx(store, 'readwrite').delete(key); req.onsuccess = () => resolve(); req.onerror = () => reject(req.error); }); }
+function idbGet(store, key) { return new Promise((resolve, reject) => { const req = idbTx(store).get(key); req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error); }); }
 
-function idbGetAll(store) {
-    return new Promise((resolve, reject) => {
-        const req = idbTx(store).getAll();
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-    });
+/* ── OPFS Helpers ── */
+async function opfsGetHandle(path) {
+    const parts = path.split('/');
+    let current = opfsRoot;
+    for (let i = 0; i < parts.length - 1; i++) current = await current.getDirectoryHandle(parts[i], { create: true });
+    return current.getFileHandle(parts[parts.length - 1], { create: true });
 }
-
-function idbPut(store, data) {
-    return new Promise((resolve, reject) => {
-        const req = idbTx(store, 'readwrite').put(data);
-        req.onsuccess = () => resolve();
-        req.onerror = () => reject(req.error);
-    });
-}
-
-function idbDelete(store, key) {
-    return new Promise((resolve, reject) => {
-        const req = idbTx(store, 'readwrite').delete(key);
-        req.onsuccess = () => resolve();
-        req.onerror = () => reject(req.error);
-    });
-}
-
-function idbGet(store, key) {
-    return new Promise((resolve, reject) => {
-        const req = idbTx(store).get(key);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-    });
-}
+async function opfsWriteFile(path, data) { const h = await opfsGetHandle(path); const w = await h.createWritable(); await w.write(data); await w.close(); }
+async function opfsReadFile(path) { const h = await opfsGetHandle(path); const f = await h.getFile(); return await f.arrayBuffer(); }
+async function opfsDeleteFile(path) { try { const parts = path.split('/'); let c = opfsRoot; for (let i = 0; i < parts.length - 1; i++) c = await c.getDirectoryHandle(parts[i]); await c.removeEntry(parts[parts.length - 1]); } catch {} }
+async function opfsListDir(dir) { const entries = []; const dh = await opfsRoot.getDirectoryHandle(dir); for await (const [name] of dh.entries()) entries.push(name); return entries; }
+async function opfsFileExists(path) { try { await opfsGetHandle(path); return true; } catch { return false; } }
 
 /**
- * Initialize storage: OPFS first, IndexedDB fallback.
- * Also requests persistent storage to prevent auto-deletion.
+ * Initialize storage: OPFS PRIMARY, IndexedDB FALLBACK.
+ * Auto-migrates IndexedDB → OPFS on first OPFS init.
  */
 export async function initSovereignDB() {
     if ((opfsRoot && dbMode === 'opfs') || (idb && dbMode === 'indexeddb')) return opfsRoot || idb;
     if (initPromise) return initPromise;
 
     initPromise = (async () => {
-        // Request persistent storage (prevents browser auto-deletion)
         await requestPersistence();
 
-        // Try OPFS first (sandboxed, hidden, fast)
-        const opfsOk = await initOPFS();
-        if (opfsOk) return opfsRoot;
+        // ALWAYS open IndexedDB first (for legacy vault discovery)
+        await openIDB();
 
-        // Fallback to IndexedDB
-        try {
-            await openIDB();
-            dbMode = 'indexeddb';
-            log('info', 'IndexedDB fallback initialized');
-            return idb;
-        } catch (err) {
-            log('error', 'All storage backends failed', err);
-            throw err;
+        // Try OPFS (PRIMARY for new data)
+        const opfsOk = await initOPFS();
+        if (opfsOk) {
+            // Migrate any existing IndexedDB data → OPFS
+            await migrateIDBToOPFS();
+            return opfsRoot;
         }
+
+        // Fallback: use IndexedDB for everything
+        dbMode = 'indexeddb';
+        log('warn', 'OPFS unavailable — using IndexedDB (FALLBACK)');
+        return idb;
     })();
 
     return initPromise;
@@ -149,38 +110,58 @@ export async function initSovereignDB() {
 
 function useIDB() { return dbMode === 'indexeddb'; }
 
-/* ── OPFS Helpers ── */
-async function opfsWriteFile(path, data) {
-    const handle = await opfsRoot.getFileHandle(path, { create: true });
-    const writable = await handle.createWritable();
-    await writable.write(data);
-    await writable.close();
-}
-
-async function opfsReadFile(path) {
-    const handle = await opfsRoot.getFileHandle(path);
-    const file = await handle.getFile();
-    return await file.arrayBuffer();
-}
-
-async function opfsDeleteFile(path) {
-    try { await opfsRoot.removeEntry(path); } catch { /* file doesn't exist */ }
-}
-
-async function opfsListFiles(dir) {
-    const entries = [];
-    const dirHandle = await opfsRoot.getDirectoryHandle(dir, { create: false });
-    for await (const [name] of dirHandle.entries()) {
-        entries.push(name);
-    }
-    return entries;
-}
-
-async function opfsFileExists(path) {
+/**
+ * Migrate IndexedDB → OPFS. Runs once.
+ * Moves vaults, vessels, and settings to OPFS, then clears IndexedDB.
+ */
+async function migrateIDBToOPFS() {
     try {
-        await opfsRoot.getFileHandle(path);
-        return true;
-    } catch { return false; }
+        if (!opfsRoot) return;
+        const flag = await opfsFileExists('settings/__migrated.json');
+        if (flag) { log('info', 'OPFS migration already complete'); return; }
+
+        // Open IndexedDB to check for legacy data
+        await openIDB();
+        const vaults = await idbGetAll('vaults');
+        const vessels = await idbGetAll('vessels');
+        const settings = await idbGetAll('settings');
+
+        if (!vaults.length && !vessels.length) {
+            // Nothing to migrate
+            await opfsWriteFile('settings/__migrated.json', JSON.stringify({ timestamp: Date.now() }));
+            return;
+        }
+
+        log('info', `Migrating ${vaults.length} vaults, ${vessels.length} vessels to OPFS...`);
+
+        // Migrate vaults
+        for (const v of vaults) {
+            const vaultData = { ...v, salt: v.salt instanceof Uint8Array ? Array.from(v.salt) : v.salt };
+            await opfsWriteFile(`vaults/${v.id}.json`, JSON.stringify(vaultData));
+        }
+
+        // Migrate vessels
+        for (const v of vessels) {
+            const meta = { id: v.id, type: v.type, tags: v.tags, priority: v.priority, color: v.color, isFlagged: v.isFlagged, timestamp: v.timestamp, updatedAt: v.updatedAt };
+            await opfsWriteFile(`vessels/${v.id}.meta`, JSON.stringify(meta));
+            await opfsWriteFile(`vessels/${v.id}.blob`, v.blob);
+            await opfsWriteFile(`vessels/${v.id}.iv`, v.iv);
+        }
+
+        // Migrate settings
+        for (const s of settings) {
+            if (s.key === '__opfs_migration_done') continue;
+            await opfsWriteFile(`settings/${s.key}.json`, s.value);
+        }
+
+        // Clear IndexedDB (data now in OPFS)
+        for (const v of vessels) { try { await idbDelete('vessels', v.id); } catch {} }
+        for (const v of vaults) { try { await idbDelete('vaults', v.id); } catch {} }
+        for (const s of settings) { try { await idbDelete('settings', s.key); } catch {} }
+
+        await opfsWriteFile('settings/__migrated.json', JSON.stringify({ timestamp: Date.now(), vaults: vaults.length, vessels: vessels.length }));
+        log('info', `Migration complete: ${vaults.length} vaults, ${vessels.length} vessels moved to OPFS`);
+    } catch (err) { log('error', 'Migration failed', err); }
 }
 
 /* ── Vessels (encrypted items) ── */
@@ -213,7 +194,7 @@ export async function getAllVessels() {
             return rows.sort((a, b) => b.timestamp - a.timestamp);
         }
         // OPFS: List all vessel files and read metadata
-        const files = await opfsListFiles('vessels');
+        const files = await opfsListDir('vessels');
         const metaFiles = files.filter(f => f.endsWith('.meta'));
         const vessels = [];
         for (const metaFile of metaFiles) {
@@ -301,14 +282,7 @@ export async function setSetting(key, value) {
     } catch (err) { log('error', 'setSetting failed', err); throw err; }
 }
 
-/* ── Vaults (persistent across sessions) ── */
-
-/**
- * Save vault metadata.
- * OPFS: Writes vault.json in vaults/ directory.
- * Salt is stored as plain array (survives JSON serialization).
- * Verifier stored for challenge-response password verification.
- */
+/* ── Vaults ── */
 export async function saveVault(id, name, salt, verifier = null) {
     await initSovereignDB();
     try {
@@ -317,68 +291,81 @@ export async function saveVault(id, name, salt, verifier = null) {
         if (useIDB()) {
             await idbPut('vaults', vaultData);
         } else {
-            // OPFS: Write vault metadata as JSON
-            try { await opfsRoot.getDirectoryHandle('vaults', { create: true }); } catch { /* exists */ }
             await opfsWriteFile(`vaults/${id}.json`, JSON.stringify(vaultData));
         }
     } catch (err) { log('error', 'saveVault failed', err); throw err; }
 }
 
-/**
- * Get all vaults. Salt is reconstructed as Uint8Array.
- */
 export async function getAllVaults() {
     await initSovereignDB();
     try {
-        if (useIDB()) {
-            const rows = await idbGetAll('vaults');
-            return rows.map(r => ({
-                ...r,
-                salt: new Uint8Array(r.salt || []),
-                verifier: r.verifier || null
-            })).sort((a, b) => b.createdAt - a.createdAt);
-        }
-        // OPFS: List all vault JSON files
-        const files = await opfsListFiles('vaults');
-        const jsonFiles = files.filter(f => f.endsWith('.json'));
         const vaults = [];
-        for (const file of jsonFiles) {
+        
+        // Always check IndexedDB first (legacy vaults)
+        if (idb) {
             try {
-                const buf = await opfsReadFile(`vaults/${file}`);
-                const vault = JSON.parse(new TextDecoder().decode(buf));
-                vaults.push({
-                    ...vault,
-                    salt: new Uint8Array(vault.salt || []),
-                    verifier: vault.verifier || null
-                });
-            } catch (err) { log('warn', `Failed to read vault ${file}`, err); }
+                const idbVaults = await idbGetAll('vaults');
+                for (const r of idbVaults) {
+                    let salt;
+                    if (r.salt instanceof Uint8Array) {
+                        salt = r.salt;
+                    } else if (r.salt instanceof ArrayBuffer) {
+                        salt = new Uint8Array(r.salt);
+                    } else if (Array.isArray(r.salt)) {
+                        salt = new Uint8Array(r.salt);
+                    } else if (typeof r.salt === 'string') {
+                        const binary = atob(r.salt);
+                        salt = new Uint8Array(binary.length);
+                        for (let i = 0; i < binary.length; i++) salt[i] = binary.charCodeAt(i);
+                    } else {
+                        salt = new Uint8Array(0);
+                    }
+                    vaults.push({ ...r, salt, verifier: r.verifier || null });
+                }
+            } catch (err) { log('warn', 'IDB vault read failed', err); }
         }
+        
+        // Also check OPFS (new vaults)
+        if (opfsRoot) {
+            try {
+                const files = await opfsListDir('vaults');
+                for (const f of files.filter(f => f.endsWith('.json'))) {
+                    try {
+                        const buf = await opfsReadFile(`vaults/${f}`);
+                        const v = JSON.parse(new TextDecoder().decode(buf));
+                        let salt;
+                        if (v.salt instanceof Uint8Array) {
+                            salt = v.salt;
+                        } else if (v.salt instanceof ArrayBuffer) {
+                            salt = new Uint8Array(v.salt);
+                        } else if (Array.isArray(v.salt)) {
+                            salt = new Uint8Array(v.salt);
+                        } else {
+                            salt = new Uint8Array(v.salt || []);
+                        }
+                        if (!vaults.find(existing => existing.id === v.id)) {
+                            vaults.push({ ...v, salt, verifier: v.verifier || null });
+                        }
+                    } catch (err) { log('warn', `Failed to read vault ${f}`, err); }
+                }
+            } catch (err) { log('warn', 'OPFS vault read failed', err); }
+        }
+        
         return vaults.sort((a, b) => b.createdAt - a.createdAt);
     } catch (err) { log('error', 'getAllVaults failed', err); throw err; }
 }
 
-/**
- * Delete a vault and all its vessels.
- */
 export async function deleteVault(id) {
     await initSovereignDB();
     try {
         if (useIDB()) {
             await idbDelete('vaults', id);
             const vessels = await idbGetAll('vessels');
-            for (const v of vessels) {
-                if (v.id.startsWith(id + '_')) await idbDelete('vessels', v.id);
-            }
+            for (const v of vessels) { if (v.id.startsWith(id + '_')) await idbDelete('vessels', v.id); }
         } else {
-            // OPFS
             await opfsDeleteFile(`vaults/${id}.json`);
-            // Delete all vessels belonging to this vault
-            const files = await opfsListFiles('vessels');
-            for (const f of files) {
-                if (f.startsWith(id + '_')) {
-                    await opfsDeleteFile(`vessels/${f}`);
-                }
-            }
+            const files = await opfsListDir('vessels');
+            for (const f of files) { if (f.startsWith(id + '_')) await opfsDeleteFile(`vessels/${f}`); }
         }
     } catch (err) { log('error', 'deleteVault failed', err); throw err; }
 }

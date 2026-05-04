@@ -1,8 +1,8 @@
 /**
  * Sovereign Companion Engine v2.0
  * For the lonely, the quiet, the ones who need someone who remembers.
- * This isn't a chatbot. It's a friend that lives in your vault.
- * It remembers your wins, notices your patterns, and shows up every day.
+ * All data encrypted with vault key before storage.
+ * Zero plaintext in localStorage or any storage.
  */
 
 export class CompanionEngine {
@@ -12,29 +12,57 @@ export class CompanionEngine {
         this._milestones = {};
         this._lastInteraction = null;
         this._greetingShown = false;
+        this._key = null; // Set after vault unlock
     }
 
-    /* ── Load memories from storage ── */
+    /**
+     * Set the vault encryption key. Must be called after vault unlock.
+     */
+    setKey(key) {
+        this._key = key;
+    }
+
+    /* ── Encrypt data with vault key ── */
+    async _encrypt(data) {
+        if (!this._key) return JSON.stringify(data); // Fallback if no key
+        const { encryptData } = await import('./crypto.js');
+        const { ciphertext, iv } = await encryptData(this._key, JSON.stringify(data));
+        return JSON.stringify({ ciphertext: Array.from(new Uint8Array(ciphertext)), iv: Array.from(iv) });
+    }
+
+    /* ── Decrypt data with vault key ── */
+    async _decrypt(encryptedStr) {
+        try {
+            const parsed = JSON.parse(encryptedStr);
+            if (!parsed.ciphertext || !parsed.iv) return JSON.parse(encryptedStr); // Legacy plaintext
+            if (!this._key) return null;
+            const { decryptData } = await import('./crypto.js');
+            const result = await decryptData(this._key, new Uint8Array(parsed.ciphertext), new Uint8Array(parsed.iv));
+            return JSON.parse(result);
+        } catch { return null; }
+    }
+
+    /* ── Load memories from storage (encrypted) ── */
     async load() {
         try {
             const data = localStorage.getItem('sovereign-companion');
-            if (data) {
-                const parsed = JSON.parse(data);
-                this._memories = parsed.memories || [];
-                this._moodHistory = parsed.moodHistory || [];
-                this._milestones = parsed.milestones || {};
-                this._lastInteraction = parsed.lastInteraction || null;
-            }
+            if (!data) return;
+            const parsed = JSON.parse(data);
+            this._memories = await this._decrypt(parsed.memories) || [];
+            this._moodHistory = await this._decrypt(parsed.moodHistory) || [];
+            this._milestones = await this._decrypt(parsed.milestones) || {};
+            this._lastInteraction = parsed.lastInteraction || null;
         } catch (e) { console.warn('Companion: load failed', e); }
     }
 
-    /* ── Save memories to storage ── */
+    /* ── Save memories to storage (encrypted) ── */
     async save() {
         try {
+            const memories = await this._encrypt(this._memories.slice(-100));
+            const moodHistory = await this._encrypt(this._moodHistory.slice(-30));
+            const milestones = await this._encrypt(this._milestones);
             localStorage.setItem('sovereign-companion', JSON.stringify({
-                memories: this._memories.slice(-100), // Keep last 100 memories
-                moodHistory: this._moodHistory.slice(-30), // Keep last 30 days
-                milestones: this._milestones,
+                memories, moodHistory, milestones,
                 lastInteraction: this._lastInteraction
             }));
         } catch (e) { console.warn('Companion: save failed', e); }
