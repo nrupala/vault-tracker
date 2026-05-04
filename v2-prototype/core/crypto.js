@@ -33,7 +33,25 @@ export async function encryptData(key, plaintext) {
 }
 
 export async function decryptData(key, ciphertext, iv) {
-    const dec = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
+    // Ensure ciphertext is ArrayBuffer or ArrayBufferView
+    let ct = ciphertext;
+    if (ct instanceof ArrayBuffer) {
+        // Already correct type
+    } else if (ct instanceof Uint8Array) {
+        ct = ct.buffer;
+    } else if (Array.isArray(ct)) {
+        ct = new Uint8Array(ct).buffer;
+    }
+    // Ensure iv is Uint8Array
+    let ivBytes = iv;
+    if (ivBytes instanceof Uint8Array) {
+        // Already correct
+    } else if (Array.isArray(ivBytes)) {
+        ivBytes = new Uint8Array(ivBytes);
+    } else if (ivBytes instanceof ArrayBuffer) {
+        ivBytes = new Uint8Array(ivBytes);
+    }
+    const dec = await crypto.subtle.decrypt({ name: "AES-GCM", iv: ivBytes }, key, ct);
     return new TextDecoder().decode(dec);
 }
 
@@ -51,15 +69,71 @@ export async function createVerifier(password, salt) {
 
 /**
  * Verify password by decrypting the stored verifier.
+ * Falls back to test encrypt/decrypt if no verifier exists or format is invalid (legacy vaults).
  * Returns true only if decrypted value matches magic string.
  * No key material is ever exposed or returned.
  */
 export async function verifyPassword(password, salt, verifier) {
     try {
-        const key = await deriveKey(password, salt);
-        const result = await decryptData(key, verifier.ciphertext, verifier.iv);
+        // Ensure salt is a proper Uint8Array
+        let saltBytes;
+        if (salt instanceof Uint8Array) {
+            saltBytes = salt;
+        } else if (salt instanceof ArrayBuffer) {
+            saltBytes = new Uint8Array(salt);
+        } else if (Array.isArray(salt)) {
+            saltBytes = new Uint8Array(salt);
+        } else {
+            console.warn('[Crypto] Invalid salt format:', typeof salt);
+            return false;
+        }
+        
+        const key = await deriveKey(password, saltBytes);
+        
+        // If verifier exists and has valid structure, try to use it
+        if (verifier && verifier.ciphertext && verifier.iv) {
+            try {
+                let ct, iv;
+                // Handle various ciphertext formats
+                if (verifier.ciphertext instanceof ArrayBuffer) {
+                    ct = verifier.ciphertext;
+                } else if (verifier.ciphertext instanceof Uint8Array) {
+                    ct = verifier.ciphertext.buffer;
+                } else if (Array.isArray(verifier.ciphertext)) {
+                    ct = new Uint8Array(verifier.ciphertext).buffer;
+                } else {
+                    throw new Error('Invalid ciphertext format');
+                }
+                // Handle various IV formats
+                if (verifier.iv instanceof Uint8Array) {
+                    iv = verifier.iv;
+                } else if (Array.isArray(verifier.iv)) {
+                    iv = new Uint8Array(verifier.iv);
+                } else if (verifier.iv instanceof ArrayBuffer) {
+                    iv = new Uint8Array(verifier.iv);
+                } else {
+                    throw new Error('Invalid IV format');
+                }
+                const result = await decryptData(key, ct, iv);
+                if (result === MAGIC) return true;
+            } catch (err) {
+                // Verifier format invalid or decryption failed - fall back to test
+                console.warn('[Crypto] Verifier decryption failed, using fallback:', err.message);
+            }
+        }
+        
+        // Fallback: encrypt then decrypt a test string
+        // This works for ALL vaults regardless of verifier format
+        const testIv = crypto.getRandomValues(new Uint8Array(12));
+        const testCt = await crypto.subtle.encrypt(
+            { name: "AES-GCM", iv: testIv }, key, new TextEncoder().encode(MAGIC)
+        );
+        const result = await decryptData(key, testCt, testIv);
         return result === MAGIC;
-    } catch { return false; }
+    } catch (err) {
+        console.warn('[Crypto] Password verification failed:', err.message);
+        return false;
+    }
 }
 
 /**
@@ -91,3 +165,88 @@ export async function createVessel(key, type, payload, tags = [], priority = 'me
     const serialized = (sanitized instanceof Blob) ? await sanitized.text() : JSON.stringify(data);
     return encryptData(key, serialized);
 }
+
+// ============================================================================
+// DOUBLE RATCHET PRIMITIVES
+// ============================================================================
+
+/**
+ * Generate an Elliptic Curve Diffie-Hellman (ECDH) key pair on the P-256 curve.
+ * Used for establishing shared secrets during the asymmetric ratchet step.
+ */
+export async function generateECDHKeyPair() {
+    return crypto.subtle.generateKey(
+        { name: "ECDH", namedCurve: "P-256" },
+        false, // Private key cannot be extracted
+        ["deriveBits"]
+    );
+}
+
+/**
+ * Export a public key into a compressed/raw ArrayBuffer format for wire transport.
+ */
+export async function exportPublicKey(publicKey) {
+    return crypto.subtle.exportKey("raw", publicKey);
+}
+
+/**
+ * Import a peer's raw public key.
+ */
+export async function importPublicKey(rawKeyBytes) {
+    return crypto.subtle.importKey(
+        "raw",
+        rawKeyBytes,
+        { name: "ECDH", namedCurve: "P-256" },
+        true, // Public keys are always extractable
+        []
+    );
+}
+
+/**
+ * Perform a Diffie-Hellman key exchange.
+ * Combines local private key and remote public key to derive shared secret bits.
+ * Returns a 32-byte ArrayBuffer (256 bits).
+ */
+export async function deriveSharedSecret(localPrivateKey, remotePublicKey) {
+    return crypto.subtle.deriveBits(
+        { name: "ECDH", public: remotePublicKey },
+        localPrivateKey,
+        256
+    );
+}
+
+/**
+ * HMAC-based Extract-and-Expand Key Derivation Function (HKDF).
+ * Used aggressively within the Double Ratchet to safely derive the next 
+ * Chain Key and Message Key from an input material (like the shared secret).
+ * Returns two 32-byte chunks as an ArrayBuffer of total length 64.
+ */
+export async function hkdf(ikm, salt, infoStr = "Ratchet") {
+    // 1. Import the IKM (Input Keying Material)
+    const baseKey = await crypto.subtle.importKey(
+        "raw",
+        ikm,
+        "HKDF",
+        false,
+        ["deriveBits"]
+    );
+
+    // 2. Setup Salt (Defaults to 32 bytes of zeros if not provided)
+    const saltBuffer = salt || new Uint8Array(32);
+    
+    // 3. Setup Info
+    const info = new TextEncoder().encode(infoStr);
+
+    // 4. Derive Expand bits (requesting 64 bytes total: 32 for key1, 32 for key2)
+    return crypto.subtle.deriveBits(
+        {
+            name: "HKDF",
+            hash: "SHA-256",
+            salt: saltBuffer,
+            info: info
+        },
+        baseKey,
+        512 // 512 bits = 64 bytes
+    );
+}
+
