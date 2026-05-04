@@ -22,6 +22,12 @@ class SovereignCompanionHUD extends HTMLElement {
             this.peerCount = syncBus.peerCount;
             this.render();
         });
+
+        // Listen for incoming E2EE decrypted messages from the Ratchet pipeline
+        syncBus.addEventListener('message-decrypted', (e) => {
+            const { from, plaintext } = e.detail;
+            this.addMessage('peer', `<b>[Peer ${from.split('@')[0]}]</b>: ${plaintext}`);
+        });
         
         // Auto-connect for the prototype
         syncBus.connect("user@sovereign", "pass");
@@ -47,6 +53,24 @@ class SovereignCompanionHUD extends HTMLElement {
             this.addMessage('bot', `Recommendation: ${audit.recommendation}`);
         } else {
             this.addMessage('bot', payload);
+            
+            // Replicate outgoing text to peers over the E2EE Sync Bus
+            if (this.peerCount > 0) {
+                try {
+                    // Pull the first available peer from the Set
+                    const peerJid = Array.from(syncBus.peers)[0];
+                    
+                    // Generate a dummy public key for prototype bootstrapping 
+                    // (in reality, this is fetched from a decentralized directory or scanned QR code)
+                    const { generateDH } = await import('../core/double-ratchet.js');
+                    const dummyKey = await generateDH();
+                    
+                    await syncBus.sendEncrypted(peerJid, 'user@sovereign', text, dummyKey.publicKey);
+                    this.addMessage('bot', `<span style="color:#555;font-size:0.7rem;"><i>[Sent via Double Ratchet to ${peerJid}]</i></span>`);
+                } catch(err) {
+                    console.error("Ratchet Error:", err);
+                }
+            }
         }
     }
 
