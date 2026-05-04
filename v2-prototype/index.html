@@ -5,10 +5,22 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
 <title>Sovereign Vault v2.0</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='%2310b981'/><circle cx='50' cy='50' r='15' fill='%230a0a0a'/></svg>" type="image/svg+xml">
+<link rel="manifest" href="manifest.json">
 <style>html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#0a0a0a}</style>
 </head>
 <body>
 <sovereign-app></sovereign-app>
 <script type="module" src="ui/SovereignApp.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').then(reg => {
+        console.log('Sovereign PWA SW registered.', reg);
+      }).catch(err => {
+        console.log('Sovereign PWA SW registration failed: ', err);
+      });
+    });
+  }
+</script>
 </body>
 </html>
