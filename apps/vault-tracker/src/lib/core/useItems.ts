@@ -32,15 +32,20 @@ export function useItems(activeVaultId: string | undefined, key: CryptoKey | nul
     try {
       const encryptedItems = await db.items.where('vaultId').equals(activeVaultId).toArray();
       
-      const decryptedItems: DecryptedItem[] = await Promise.all(
-        encryptedItems.map(async (item: EncryptedItem) => {
+      // P0 resilience: decrypt per-item so a single corrupt/undecryptable record
+      // cannot make the whole vault render empty (was Promise.all, which rejected atomically).
+      const decryptedItems: DecryptedItem[] = [];
+      const failedIds: string[] = [];
+      for (const item of encryptedItems) {
+        try {
           const payloadString = await decryptData(key, item.encryptedPayload, item.nonce);
-          return {
-            ...item,
-            payload: JSON.parse(payloadString),
-          } as DecryptedItem;
-        })
-      );
+          decryptedItems.push({ ...item, payload: JSON.parse(payloadString) } as DecryptedItem);
+        } catch (itemErr) {
+          failedIds.push(item.id);
+          console.error(`Skipping item ${item.id}: failed to decrypt/parse.`, itemErr);
+        }
+      }
+      if (failedIds.length > 0) console.warn(`${failedIds.length} item(s) skipped (could not decrypt).`);
       
       setItems(decryptedItems.sort((a,b) => b.updatedAt - a.updatedAt));
     } catch (e) {
