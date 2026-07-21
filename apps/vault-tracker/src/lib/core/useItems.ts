@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { db, type EncryptedItem } from './db';
 import { encryptData, decryptData } from './crypto';
+import { getEntitlement, FREE_LIMIT_PER_MODULE, LicenseLimitError, emitLimitReached } from './license';
 import { v4 as uuidv4 } from 'uuid';
 
 // This is the plaintext shape of the data used by the UI
@@ -68,6 +69,21 @@ export function useItems(activeVaultId: string | undefined, key: CryptoKey | nul
     priority: DecryptedItem['priority'] = 'low'
   ) => {
     if (!activeVaultId || !key) throw new Error('Vault is locked');
+
+    // P0 license gate: free tier is capped at FREE_LIMIT_PER_MODULE items PER MODULE.
+    // Pro is unlimited (bounded only by device storage). Enforced at the single
+    // createItem choke point so every module (notes/tasks/habits/ledger) inherits it.
+    if (getEntitlement() === 'free') {
+      const existingCount = await db.items
+        .where('vaultId')
+        .equals(activeVaultId)
+        .and((i) => i.type === type)
+        .count();
+      if (existingCount >= FREE_LIMIT_PER_MODULE) {
+        emitLimitReached(type, FREE_LIMIT_PER_MODULE);
+        throw new LicenseLimitError(type, FREE_LIMIT_PER_MODULE);
+      }
+    }
 
     const plaintextPayload = JSON.stringify(payload);
     const { ciphertext, nonce } = await encryptData(key, plaintextPayload);
