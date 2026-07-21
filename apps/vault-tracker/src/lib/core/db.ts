@@ -11,10 +11,22 @@ import Dexie, { type EntityTable } from 'dexie';
 export interface Vault {
   id: string; // UUID
   name: string; // Plaintext Name of the vault
-  salt: Uint8Array; // Public salt used for key derivation
+  salt: Uint8Array; // Public salt used for password-KEK derivation
   challengeCiphertext: ArrayBuffer; // Used to verify password is correct
   challengeNonce: Uint8Array; // Used to verify password is correct
   createdAt: number;
+
+  // --- v2 key architecture (DEK model) ---
+  // Present once a vault is created on, or migrated to, the DEK scheme. Items are
+  // encrypted under a random DEK; the DEK is wrapped by a password-derived KEK
+  // and, independently, by a recovery-key-derived KEK. keyVersion 2 = DEK model;
+  // undefined/1 = legacy (key derived directly from password, migrated on unlock).
+  keyVersion?: number;
+  dekWrappedByPassword?: ArrayBuffer;
+  dekPasswordNonce?: Uint8Array;
+  dekWrappedByRecovery?: ArrayBuffer;
+  dekRecoveryNonce?: Uint8Array;
+  recoverySalt?: Uint8Array; // salt for the recovery-key KEK
 }
 
 // All user data (Notes, Tasks, Habits) are stored here.
