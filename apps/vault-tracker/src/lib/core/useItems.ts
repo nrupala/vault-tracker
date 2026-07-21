@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { db, type EncryptedItem } from './db';
 import { encryptData, decryptData } from './crypto';
 import { getEntitlement, FREE_LIMIT_PER_MODULE, LicenseLimitError, emitLimitReached } from './license';
+import { createEncryptedBackup, restoreEncryptedBackup } from './backup';
 import { v4 as uuidv4 } from 'uuid';
 
 // This is the plaintext shape of the data used by the UI
@@ -294,6 +295,30 @@ export function useItems(activeVaultId: string | undefined, key: CryptoKey | nul
     return count;
   }, [activeVaultId, key, createItem, loadItems]);
 
+  const exportEncryptedBackup = useCallback(async (backupPassword: string) => {
+    const text = await createEncryptedBackup(items, backupPassword, {});
+    const blob = new Blob([text], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `vault-backup-${new Date().toISOString().split('T')[0]}.vtbackup`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [items]);
+
+  const restoreFromBackup = useCallback(async (fileText: string, backupPassword: string) => {
+    const restored = await restoreEncryptedBackup(fileText, backupPassword);
+    let count = 0;
+    for (const item of restored) {
+      await createItem(item.type || 'note', item.payload || item, item.tags || [], item.priority || 'medium');
+      count++;
+    }
+    await loadItems();
+    return count;
+  }, [createItem, loadItems]);
+
   return {
     items,
     allTags,
@@ -304,6 +329,8 @@ export function useItems(activeVaultId: string | undefined, key: CryptoKey | nul
     deleteItem,
     exportData,
     importData,
+    exportEncryptedBackup,
+    restoreFromBackup,
   };
 }
 

@@ -5,3 +5,4 @@ export * from './useVault';
 export * from './intelligence';
 export * from './useSettings';
 export * from './license';
+export * from './backup';
