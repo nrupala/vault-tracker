@@ -134,3 +134,94 @@ export async function generateVerificationPayload(key: CryptoKey): Promise<{
     challengeNonce: nonce,
   };
 }
+
+// ---------------------------------------------------------------------------
+// DEK (Data-Encryption-Key) model — v2 key architecture.
+//
+// Items are encrypted under a random DEK. The DEK is wrapped (encrypted) by a
+// KEK derived from the master password, and INDEPENDENTLY by a KEK derived from
+// a one-time recovery key. This lets the user recover data with the recovery key
+// without the password, and rotate the password by simply re-wrapping the DEK
+// (no item re-encryption). deriveKey() produces the KEKs; the DEK is imported as
+// a non-extractable AES-GCM key for item encrypt/decrypt — so useItems keeps its
+// existing CryptoKey interface unchanged (the key it receives is now the DEK).
+// ---------------------------------------------------------------------------
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+/** Generate a fresh random 256-bit data-encryption key (raw bytes). */
+export function generateDEK(): Uint8Array {
+  return window.crypto.getRandomValues(new Uint8Array(32));
+}
+
+/** Import raw DEK bytes as a non-extractable AES-GCM key used to encrypt items. */
+export function importDEK(raw: Uint8Array): Promise<CryptoKey> {
+  return window.crypto.subtle.importKey(
+    'raw',
+    raw as BufferSource,
+    { name: ALGORITHM },
+    false, // non-extractable
+    ['encrypt', 'decrypt']
+  );
+}
+
+/** Wrap (encrypt) the DEK under a KEK derived from a password or recovery key. */
+export async function wrapDEK(
+  kek: CryptoKey,
+  dek: Uint8Array
+): Promise<{ ciphertext: ArrayBuffer; nonce: Uint8Array }> {
+  return encryptData(kek, bytesToBase64(dek));
+}
+
+/** Unwrap (decrypt) the DEK. Throws (GCM auth failure) if the KEK is wrong. */
+export async function unwrapDEK(
+  kek: CryptoKey,
+  ciphertext: ArrayBuffer,
+  nonce: Uint8Array
+): Promise<Uint8Array> {
+  const b64 = await decryptData(kek, ciphertext, nonce);
+  return base64ToBytes(b64);
+}
+
+// Recovery key: 20 random bytes (160-bit) rendered as base32, grouped for
+// legibility (e.g. "K7Q2M-9F3XT-..."). Shown ONCE at vault creation/upgrade.
+const B32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+
+function base32Encode(bytes: Uint8Array): string {
+  let bits = 0;
+  let value = 0;
+  let out = '';
+  for (let i = 0; i < bytes.length; i++) {
+    value = (value << 8) | bytes[i];
+    bits += 8;
+    while (bits >= 5) {
+      out += B32_ALPHABET[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  if (bits > 0) out += B32_ALPHABET[(value << (5 - bits)) & 31];
+  return out;
+}
+
+/** Generate a human-transcribable one-time recovery key. */
+export function generateRecoveryKey(): string {
+  const raw = window.crypto.getRandomValues(new Uint8Array(20));
+  const b32 = base32Encode(raw); // 32 chars
+  return (b32.match(/.{1,5}/g) || []).join('-');
+}
+
+/** Normalize a user-entered recovery key (strip spaces/dashes, uppercase). */
+export function normalizeRecoveryKey(input: string): string {
+  return input.replace(/[\s-]/g, '').toUpperCase();
+}

@@ -23,6 +23,7 @@ function VaultManager({ onUnlock }: { onUnlock: () => void }) {
   const [loading, setLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [enableBiometrics, setEnableBiometrics] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
     loadVaults();

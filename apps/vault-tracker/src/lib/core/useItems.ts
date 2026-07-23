@@ -1,6 +1,8 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { db, type EncryptedItem } from './db';
 import { encryptData, decryptData } from './crypto';
+import { getEntitlement, FREE_LIMIT_PER_MODULE, LicenseLimitError, emitLimitReached } from './license';
+import { createEncryptedBackup, restoreEncryptedBackup } from './backup';
 import { v4 as uuidv4 } from 'uuid';
 
 // This is the plaintext shape of the data used by the UI
@@ -32,15 +34,20 @@ export function useItems(activeVaultId: string | undefined, key: CryptoKey | nul
     try {
       const encryptedItems = await db.items.where('vaultId').equals(activeVaultId).toArray();
       
-      const decryptedItems: DecryptedItem[] = await Promise.all(
-        encryptedItems.map(async (item: EncryptedItem) => {
+      // P0 resilience: decrypt per-item so a single corrupt/undecryptable record
+      // cannot make the whole vault render empty (was Promise.all, which rejected atomically).
+      const decryptedItems: DecryptedItem[] = [];
+      const failedIds: string[] = [];
+      for (const item of encryptedItems) {
+        try {
           const payloadString = await decryptData(key, item.encryptedPayload, item.nonce);
-          return {
-            ...item,
-            payload: JSON.parse(payloadString),
-          } as DecryptedItem;
-        })
-      );
+          decryptedItems.push({ ...item, payload: JSON.parse(payloadString) } as DecryptedItem);
+        } catch (itemErr) {
+          failedIds.push(item.id);
+          console.error(`Skipping item ${item.id}: failed to decrypt/parse.`, itemErr);
+        }
+      }
+      if (failedIds.length > 0) console.warn(`${failedIds.length} item(s) skipped (could not decrypt).`);
       
       setItems(decryptedItems.sort((a,b) => b.updatedAt - a.updatedAt));
     } catch (e) {
@@ -63,6 +70,21 @@ export function useItems(activeVaultId: string | undefined, key: CryptoKey | nul
     priority: DecryptedItem['priority'] = 'low'
   ) => {
     if (!activeVaultId || !key) throw new Error('Vault is locked');
+
+    // P0 license gate: free tier is capped at FREE_LIMIT_PER_MODULE items PER MODULE.
+    // Pro is unlimited (bounded only by device storage). Enforced at the single
+    // createItem choke point so every module (notes/tasks/habits/ledger) inherits it.
+    if (getEntitlement() === 'free') {
+      const existingCount = await db.items
+        .where('vaultId')
+        .equals(activeVaultId)
+        .and((i) => i.type === type)
+        .count();
+      if (existingCount >= FREE_LIMIT_PER_MODULE) {
+        emitLimitReached(type, FREE_LIMIT_PER_MODULE);
+        throw new LicenseLimitError(type, FREE_LIMIT_PER_MODULE);
+      }
+    }
 
     const plaintextPayload = JSON.stringify(payload);
     const { ciphertext, nonce } = await encryptData(key, plaintextPayload);
@@ -273,6 +295,30 @@ export function useItems(activeVaultId: string | undefined, key: CryptoKey | nul
     return count;
   }, [activeVaultId, key, createItem, loadItems]);
 
+  const exportEncryptedBackup = useCallback(async (backupPassword: string) => {
+    const text = await createEncryptedBackup(items, backupPassword, {});
+    const blob = new Blob([text], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `vault-backup-${new Date().toISOString().split('T')[0]}.vtbackup`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [items]);
+
+  const restoreFromBackup = useCallback(async (fileText: string, backupPassword: string) => {
+    const restored = await restoreEncryptedBackup(fileText, backupPassword);
+    let count = 0;
+    for (const item of restored) {
+      await createItem(item.type || 'note', item.payload || item, item.tags || [], item.priority || 'medium');
+      count++;
+    }
+    await loadItems();
+    return count;
+  }, [createItem, loadItems]);
+
   return {
     items,
     allTags,
@@ -283,6 +329,8 @@ export function useItems(activeVaultId: string | undefined, key: CryptoKey | nul
     deleteItem,
     exportData,
     importData,
+    exportEncryptedBackup,
+    restoreFromBackup,
   };
 }
 
