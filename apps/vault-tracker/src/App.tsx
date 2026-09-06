@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, Lock, KeyRound, Plus, Github, Heart } from 'lucide-react';
 import { ThemeProvider } from './components/ThemeProvider';
-import { useVault, VaultProvider } from '@/lib/core';
+import { useVault, VaultProvider, useItems } from '@/lib/core';
 import { NotesApp } from './components/NotesApp';
 import { TasksApp } from './components/TasksApp';
 import { HabitsApp } from './components/HabitsApp';
@@ -12,12 +12,15 @@ import { LedgerApp } from './components/LedgerApp';
 import { AboutApp } from './components/AboutApp';
 import { AppShell, ActiveTab } from './components/AppShell';
 import { ConfirmModal } from './components/ConfirmModal';
+import { RecoveryKeyModal } from './components/RecoveryKeyModal';
+import { UpgradePrompt } from './components/UpgradePrompt';
 
 function VaultManager({ onUnlock }: { onUnlock: () => void }) {
-  const { vaults, loadVaults, createVault, unlockVault, deleteVault } = useVault();
-  const [mode, setMode] = useState<'unlock' | 'create' | 'delete'>('unlock');
+  const { vaults, loadVaults, createVault, unlockVault, deleteVault, recoverWithKey } = useVault();
+  const [mode, setMode] = useState<'unlock' | 'create' | 'delete' | 'recover'>('unlock');
   const [vaultName, setVaultName] = useState('');
   const [password, setPassword] = useState('');
+  const [recoveryKey, setRecoveryKey] = useState('');
   const [selectedVaultId, setSelectedVaultId] = useState<string>('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -51,6 +54,10 @@ function VaultManager({ onUnlock }: { onUnlock: () => void }) {
       } else if (mode === 'unlock') {
         if (!selectedVaultId || !password) throw new Error('Password required');
         await unlockVault(selectedVaultId, password);
+        onUnlock();
+      } else if (mode === 'recover') {
+        if (!selectedVaultId || !recoveryKey.trim() || !password) throw new Error('Recovery key and a new password are required');
+        await recoverWithKey(selectedVaultId, recoveryKey.trim(), password);
         onUnlock();
       } else if (mode === 'delete') {
         if (!selectedVaultId || !password) throw new Error('Password required to delete');
@@ -138,9 +145,29 @@ function VaultManager({ onUnlock }: { onUnlock: () => void }) {
               )}
             </AnimatePresence>
 
+            {mode === 'recover' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Recovery Key</label>
+                <textarea
+                  value={recoveryKey}
+                  onChange={(e) => setRecoveryKey(e.target.value)}
+                  rows={2}
+                  className="w-full bg-background text-foreground border border-border px-3 py-2 rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-muted-foreground resize-none"
+                  placeholder="XXXX-XXXX-XXXX-XXXX-..."
+                />
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Enter the recovery key you saved when this vault was created. You'll set a new master password below.
+                </p>
+              </div>
+            )}
+
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
-                {mode === 'delete' ? 'Confirm Master Password to Wipe Vault' : 'Master Password'}
+                {mode === 'delete'
+                  ? 'Confirm Master Password to Wipe Vault'
+                  : mode === 'recover'
+                  ? 'New Master Password'
+                  : 'Master Password'}
               </label>
               <div className="relative">
                 <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -177,8 +204,8 @@ function VaultManager({ onUnlock }: { onUnlock: () => void }) {
                 <div className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
               ) : (
                 <>
-                  {mode === 'create' ? <Plus className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-                  {mode === 'create' ? 'Create Secure Vault' : mode === 'delete' ? 'Wipe Vault Permanently' : 'Unlock Vault'}
+                  {mode === 'create' ? <Plus className="w-4 h-4" /> : mode === 'recover' ? <KeyRound className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                  {mode === 'create' ? 'Create Secure Vault' : mode === 'delete' ? 'Wipe Vault Permanently' : mode === 'recover' ? 'Reset Password & Unlock' : 'Unlock Vault'}
                 </>
               )}
             </button>
@@ -186,15 +213,23 @@ function VaultManager({ onUnlock }: { onUnlock: () => void }) {
 
           <div className="mt-8 pt-6 border-t border-border/50 flex flex-col gap-3">
             {mode === 'unlock' ? (
-              <button 
-                onClick={() => { setMode('create'); setPassword(''); setError(''); }}
-                className="text-sm font-semibold text-primary hover:underline transition-all text-center"
-              >
-                Need a new vault? Create one here
-              </button>
+              <>
+                <button 
+                  onClick={() => { setMode('create'); setPassword(''); setError(''); }}
+                  className="text-sm font-semibold text-primary hover:underline transition-all text-center"
+                >
+                  Need a new vault? Create one here
+                </button>
+                <button
+                  onClick={() => { setMode('recover'); setPassword(''); setRecoveryKey(''); setError(''); }}
+                  className="text-xs font-medium text-muted-foreground hover:text-foreground transition-all text-center"
+                >
+                  Forgot password? Use your recovery key
+                </button>
+              </>
             ) : (
               <button 
-                onClick={() => { setMode('unlock'); setPassword(''); setError(''); setShowAdvanced(false); }}
+                onClick={() => { setMode('unlock'); setPassword(''); setRecoveryKey(''); setError(''); setShowAdvanced(false); }}
                 className="text-sm font-semibold text-muted-foreground hover:text-foreground transition-all text-center"
               >
                 Back to Unlock
@@ -319,11 +354,20 @@ function MainApp() {
   );
 }
 
+function RecoveryKeyGate() {
+  const { activeVault, encryptionKey } = useVault();
+  const { exportEncryptedBackup } = useItems(activeVault?.id, encryptionKey);
+  const canBackup = Boolean(activeVault && encryptionKey);
+  return <RecoveryKeyModal onDownloadBackup={canBackup ? exportEncryptedBackup : undefined} />;
+}
+
 function App() {
   return (
     <ThemeProvider>
       <VaultProvider>
         <MainApp />
+        <RecoveryKeyGate />
+        <UpgradePrompt />
       </VaultProvider>
     </ThemeProvider>
   );
