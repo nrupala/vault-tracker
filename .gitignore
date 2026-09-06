@@ -5,12 +5,10 @@ node_modules/
 
 # Project Evolution & Strategic Reports (Local Only)
 SOVEREIGN_EVOLUTION.md
-v2-prototype/
 
-# Large binary assets (keep in releases, not git)
-*.wasm
-v2-prototype/core/sqlite3.js
-v2-prototype/core/sqlite3.wasm
+# SQLite WASM is a VENDORED RUNTIME DEPENDENCY of the buildless app -
+# it ships with the branch (no node_modules doctrine). Build outputs stay ignored.
+*.tsbuildinfo
 
 # Build outputs
 dist/

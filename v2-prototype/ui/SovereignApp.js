@@ -336,9 +336,11 @@ class SovereignApp extends HTMLElement {
             const h = await getSetting('historyLimit');
             const r = await getSetting('retentionDays');
             const a = await getSetting('autoArchive');
-            if (h) this._settings.historyLimit = JSON.parse(h);
-            if (r) this._settings.retentionDays = JSON.parse(r);
-            if (a) this._settings.autoArchive = JSON.parse(a);
+            // getSetting returns the parsed value (or null); no JSON.parse here —
+            // double-parsing objects previously threw and killed settings load.
+            if (h !== null) this._settings.historyLimit = h;
+            if (r !== null) this._settings.retentionDays = r;
+            if (a !== null) this._settings.autoArchive = a;
         } catch (err) { this._log('warn', 'Settings load failed:', err); }
     }
 
@@ -348,6 +350,7 @@ class SovereignApp extends HTMLElement {
             const { decryptData } = await import('../core/crypto.js');
             const vessels = await getAllVessels();
             this._items = [];
+            let skippedUnreadable = 0;
             for (const v of vessels) {
                 try {
                     const data = await decryptData(this._key, v.blob, v.iv);
@@ -361,22 +364,31 @@ class SovereignApp extends HTMLElement {
                         isFlagged: parsed.isFlagged || false,
                         timestamp: v.timestamp, updatedAt: v.updatedAt
                     });
-                } catch (err) { this._log('warn', 'Decrypt failed for', v.id, err); }
+                } catch (err) {
+                    // Unreadable with this key = cross-vault vessel (Hollow Vessel
+                    // doctrine: unreadable blobs are noise) or corrupt entry.
+                    skippedUnreadable++;
+                }
             }
+            if (skippedUnreadable > 0) this._log('info', `${skippedUnreadable} vessel(s) unreadable with this key (cross-vault or corrupt) - skipped`);
             const hd = await getSetting('habitCheckins');
-            if (hd) {
+            if (hd !== null && hd !== undefined) {
                 try {
-                    // Try decrypting (encrypted format)
-                    const parsed = JSON.parse(hd);
-                    if (parsed.ciphertext && parsed.iv) {
-                        const { decryptData } = await import('../core/crypto.js');
-                        const decrypted = await decryptData(this._key, new Uint8Array(parsed.ciphertext), new Uint8Array(parsed.iv));
-                        this._habits = JSON.parse(decrypted);
-                    } else {
-                        // Legacy plaintext
-                        this._habits = parsed;
+                    if (hd && typeof hd === 'object') {
+                        // Current format: encrypted envelope { ciphertext, iv }
+                        if (hd.ciphertext && hd.iv) {
+                            const { decryptData } = await import('../core/crypto.js');
+                            const decrypted = await decryptData(this._key, new Uint8Array(hd.ciphertext), new Uint8Array(hd.iv));
+                            this._habits = JSON.parse(decrypted);
+                        } else {
+                            // Structured habit map stored as object
+                            this._habits = hd;
+                        }
+                    } else if (typeof hd === 'string') {
+                        // Legacy plaintext JSON string
+                        this._habits = JSON.parse(hd);
                     }
-                } catch { this._habits = JSON.parse(hd); }
+                } catch (err) { this._log('warn', 'Habit check-ins parse failed:', err); this._habits = this._habits || {}; }
             }
         } catch (err) { this._log('error', 'Load items failed:', err); }
     }
@@ -462,7 +474,9 @@ class SovereignApp extends HTMLElement {
             const { createVessel } = await import('../core/crypto.js');
             const { saveVessel } = await import('../core/db.js');
             const vessel = await createVessel(this._key, type, payload, tags, priority, color);
-            const id = `${type}_${crypto.randomUUID()}`;
+            // Vault-scoped id: isolates vessels per vault and matches deleteVault's
+            // `startsWith(vaultId + '_')` cleanup convention.
+            const id = `${this._vaultId}_${type}_${crypto.randomUUID()}`;
             await saveVessel(id, vessel.ciphertext, vessel.iv, type, tags, priority, color, isFlagged);
             await this._loadItems();
             this._nav(this._tab);
@@ -775,6 +789,23 @@ class SovereignApp extends HTMLElement {
     }
 
     /* ── Render: Peer Chat ── */
+    async _toggleHUD() {
+        let panel = this._shadow.getElementById('hud-panel');
+        if (panel) {
+            panel.remove();
+            return;
+        }
+        try {
+            await import('./SovereignCompanionHUD.js'); // registers <sovereign-companion-hud>
+        } catch (err) { this._log('error', 'HUD load failed:', err); return; }
+        panel = document.createElement('div');
+        panel.id = 'hud-panel';
+        panel.style.cssText = 'position:fixed;right:1rem;bottom:1rem;width:320px;max-width:90vw;z-index:9999;';
+        const hud = document.createElement('sovereign-companion-hud');
+        panel.appendChild(hud);
+        this._shadow.appendChild(panel);
+    }
+
     async _renderChat() {
         try {
             const { getAllConversations, getAllContacts } = await import('../core/chat-db.js');
@@ -1014,7 +1045,7 @@ class SovereignApp extends HTMLElement {
             let c = 0;
             for (const it of items) {
                 const v = await createVessel(this._key, it.type || 'note', it.data || it.payload || {}, it.tags || [], it.priority || 'medium', it.color || 'none');
-                await saveVessel(it.id || `${it.type || 'note'}_${crypto.randomUUID()}`, v.ciphertext, v.iv, it.type || 'note', it.tags || [], it.priority || 'medium', it.color || 'none', it.isFlagged || false);
+                await saveVessel(it.id || `${this._vaultId}_${it.type || 'note'}_${crypto.randomUUID()}`, v.ciphertext, v.iv, it.type || 'note', it.tags || [], it.priority || 'medium', it.color || 'none', it.isFlagged || false);
                 c++;
             }
             await this._loadItems(); this._nav(this._tab);
@@ -1037,7 +1068,7 @@ class SovereignApp extends HTMLElement {
                 try { Object.assign(payload, JSON.parse(row.payload || '{}')); } catch (e) { this._log('warn', 'CSV payload parse failed:', e); }
                 const tags = row.tags ? row.tags.split(';').filter(Boolean) : [];
                 const v = await createVessel(this._key, type, payload, tags, row.priority || 'medium', row.color || 'none');
-                await saveVessel(`${type}_${crypto.randomUUID()}`, v.ciphertext, v.iv, type, tags, row.priority || 'medium', row.color || 'none', row.flagged === 'true');
+                await saveVessel(`${this._vaultId}_${type}_${crypto.randomUUID()}`, v.ciphertext, v.iv, type, tags, row.priority || 'medium', row.color || 'none', row.flagged === 'true');
                 c++;
             }
             await this._loadItems(); this._nav(this._tab);
@@ -1057,7 +1088,7 @@ class SovereignApp extends HTMLElement {
                 const dt = ev.match(/DTSTART[:;]?(.*)/)?.[1]?.trim();
                 const due = dt ? new Date(dt.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/, '$1-$2-$3T$4:$5:$6')).toISOString() : null;
                 const v = await createVessel(this._key, 'task', { title: summary, content: desc, dueDate: due, completed: false, createdAt: Date.now() }, ['imported-ics']);
-                await saveVessel(`task_${crypto.randomUUID()}`, v.ciphertext, v.iv, 'task', ['imported-ics']);
+                await saveVessel(`${this._vaultId}_task_${crypto.randomUUID()}`, v.ciphertext, v.iv, 'task', ['imported-ics']);
                 c++;
             }
             await this._loadItems(); this._nav(this._tab);
@@ -1085,7 +1116,7 @@ class SovereignApp extends HTMLElement {
                 const amt = parseFloat(row.amount) || 0;
                 const type = row.type === 'credit' ? 'credit' : 'debit';
                 const v = await createVessel(this._key, 'ledger', { desc: row.description || row.desc || '', amount: type === 'debit' ? -Math.abs(amt) : Math.abs(amt), type, category: row.category || 'general', classification: row.classification || 'need', notes: row.notes || '', createdAt: Date.now() });
-                await saveVessel(`ledger_${crypto.randomUUID()}`, v.ciphertext, v.iv, 'ledger');
+                await saveVessel(`${this._vaultId}_ledger_${crypto.randomUUID()}`, v.ciphertext, v.iv, 'ledger');
                 c++;
             }
             await this._loadItems(); this._nav(this._tab);
@@ -1415,7 +1446,7 @@ class SovereignApp extends HTMLElement {
                 let count = 0;
                 for (const entry of entries) {
                     const vessel = await createVessel(this._key, 'journal', entry, entry.tags || [], 'medium', 'none');
-                    const id = entry.id || `journal_${crypto.randomUUID()}`;
+                    const id = entry.id || `${this._vaultId}_journal_${crypto.randomUUID()}`;
                     await saveVessel(id, vessel.ciphertext, vessel.iv, 'journal', entry.tags || []);
                     count++;
                 }
@@ -1492,6 +1523,10 @@ class SovereignApp extends HTMLElement {
             this._themeIdx = (this._themeIdx + 1) % 5;
             this._applyTheme(this._themeIdx);
         };
+
+        // Sovereign Companion HUD (buildless Web Component, E2EE sync panel)
+        const hudBtn = this._shadow.getElementById('hud-btn');
+        if (hudBtn) hudBtn.onclick = () => this._toggleHUD();
 
         // Lock & Delete vault
         const lockBtn = this._shadow.getElementById('lock-btn');
@@ -1940,7 +1975,7 @@ class SovereignApp extends HTMLElement {
                 </div>
             </aside>
             <div class="main">
-                <header class="top"><div class="tt" id="title">Tasks</div><div class="ta"><button class="tb" id="help-btn" title="Help & Documentation">❓</button><button class="tb" id="theme-btn" title="Cycle through 5 themes">🎨</button></div></header>
+                <header class="top"><div class="tt" id="title">Tasks</div><div class="ta"><button class="tb" id="help-btn" title="Help & Documentation">❓</button><button class="tb" id="hud-btn" title="Toggle Sovereign Companion HUD (E2EE sync panel)">&#9670;</button><button class="tb" id="theme-btn" title="Cycle through 5 themes">🎨</button></div></header>
                 <div class="content">
                     <!-- Tasks -->
                     <div class="mod active" data-mod="tasks">

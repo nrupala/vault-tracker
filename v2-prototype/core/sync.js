@@ -117,7 +117,7 @@ export class SovereignSyncBus extends EventTarget {
                     
                     console.log(`🔒 [E2EE] Decrypted message from ${jid}`);
                     this.dispatchEvent(new CustomEvent('message-decrypted', { 
-                        detail: { from: jid, plaintext: decryptedPlaintext } 
+                        detail: { from: jid, plaintext: new TextDecoder().decode(decryptedPlaintext) } 
                     }));
                     return; // Successfully handed off E2EE payload
                 }

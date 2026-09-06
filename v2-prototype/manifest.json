@@ -1,16 +1,23 @@
 {
   "name": "Sovereign Vault v2.0",
   "short_name": "Sovereign",
-  "description": "Zero-trust, zero-knowledge ecosystem.",
+  "description": "Zero-trust, zero-knowledge, buildless encrypted workspace. Hollow Vessel architecture with Double Ratchet E2EE sync.",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0a0a0a",
   "theme_color": "#10b981",
   "icons": [
     {
-      "src": "favicon.ico",
+      "src": "icon-192.png",
       "sizes": "192x192",
-      "type": "image/icon"
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

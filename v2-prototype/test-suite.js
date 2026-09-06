@@ -446,6 +446,143 @@ test('OPFS primary storage', () => {
 
 // ── Results ──
 console.log(`\n${'═'.repeat(50)}`);
+// === Functional: Double Ratchet (async) ===
+console.log('\n=== Double Ratchet E2EE (functional):');
+
+const asyncTests = [];
+
+asyncTests.push((async () => {
+    const { RatchetState, generateDH, encodePK } = await import('./core/double-ratchet.js');
+    const shared = crypto.getRandomValues(new Uint8Array(32));
+
+    // A->B and B->A round trips, multi-message
+    const alice = new RatchetState();
+    const bob = new RatchetState();
+    const bobKeys = await generateDH();
+    const bobPubRaw = new Uint8Array(await encodePK(bobKeys.publicKey));
+
+    await alice.initAsAlice(shared, bobPubRaw);
+    await bob.initAsBob(shared, bobKeys);
+
+    const m1 = await alice.ratchetEncrypt('hello bob, vessel 1 incoming');
+    const d1 = await bob.ratchetDecrypt(m1.header, m1.ciphertext, m1.iv);
+    test('Alice->Bob decrypt round-trip', () => {
+        assert(new TextDecoder().decode(d1) === 'hello bob, vessel 1 incoming', 'plaintext mismatch');
+    });
+
+    const m2 = await alice.ratchetEncrypt('second message');
+    const d2 = await bob.ratchetDecrypt(m2.header, m2.ciphertext, m2.iv);
+    test('Second message decrypts (chain advance)', () => {
+        assert(new TextDecoder().decode(d2) === 'second message', 'plaintext mismatch');
+    });
+
+    let replayRejected = false;
+    try { await bob.ratchetDecrypt(m1.header, m1.ciphertext, m1.iv); } catch { replayRejected = true; }
+    test('Replayed message rejected', () => {
+        assert(replayRejected, 'replay must not decrypt twice with same chain state');
+    });
+
+    const r1 = await bob.ratchetEncrypt('reply from bob');
+    const d3 = await alice.ratchetDecrypt(r1.header, r1.ciphertext, r1.iv);
+    test('Bob->Alice decrypt round-trip (full ratchet)', () => {
+        assert(new TextDecoder().decode(d3) === 'reply from bob', 'plaintext mismatch');
+    });
+
+    // Out-of-order delivery handled via skipped keys
+    const o1 = await alice.ratchetEncrypt('ooo 1');
+    const o2 = await alice.ratchetEncrypt('ooo 2');
+    const d5 = await bob.ratchetDecrypt(o2.header, o2.ciphertext, o2.iv);
+    const d4 = await bob.ratchetDecrypt(o1.header, o1.ciphertext, o1.iv);
+    test('Out-of-order messages decrypt via skipped keys', () => {
+        assert(new TextDecoder().decode(d4) === 'ooo 1' && new TextDecoder().decode(d5) === 'ooo 2', 'skip handling broken');
+    });
+})().catch(e => { test('Double ratchet suite ran without crash', () => { throw e; }); }));
+
+asyncTests.push((async () => {
+    const { buildMessage, buildStreamOpen, buildAuthPlain, buildBind, parseStanza, SovereignBroker } = await import('./core/broker.js');
+
+    test('Stanza codec round-trip (build->parse)', () => {
+        const signal = { kind: 'vessel', payload: { id: 'v_123', action: 'update' }, from: 'a@x', ts: 1 };
+        const xml = buildMessage({ to: 'b@x', from: 'a@x', signal });
+        const parsed = parseStanza(xml);
+        assert(parsed.name === 'message', 'wrong stanza name');
+        assert(parsed.signal && parsed.signal.kind === 'vessel', 'signal lost');
+        assert(parsed.signal.payload.id === 'v_123', 'signal payload lost');
+    });
+
+    test('SASL PLAIN token decodes to NUL-separated authzid/authcid/passwd', () => {
+        const s = buildAuthPlain('u@sovereign', 'secret');
+        const token = s.match(/PLAIN">(.+)<\/auth>/)[1];
+        const decoded = Buffer.from(token, 'base64').toString('utf8');
+        assert(decoded === 'u@sovereign\u0000u@sovereign\u0000secret', 'SASL token malformed: ' + JSON.stringify(decoded));
+    });
+
+    test('Stream open + bind stanzas well-formed', () => {
+        assert(buildStreamOpen('xmpp.example').includes('stream:stream'), 'no stream open');
+        assert(buildBind('sovereign').includes('xmpp-bind'), 'no bind');
+    });
+
+    const b1 = new SovereignBroker();
+    const b2 = new SovereignBroker();
+    await b1.connect({ jid: 'a@sovereign', transport: 'loopback' });
+    await b2.connect({ jid: 'b@sovereign', transport: 'loopback' });
+    const received = new Promise((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error('no signal in 2s')), 2000);
+        b2.addEventListener('signal', e => { clearTimeout(t); resolve(e.detail); });
+    });
+    b1.sendSignal({ kind: 'ping', payload: { n: 42 } });
+    const sig = await received;
+    test('Loopback broker delivers signal cross-instance', () => {
+        assert(sig.kind === 'ping' && sig.payload.n === 42, 'signal payload mismatch');
+    });
+    await b1.close();
+    await b2.close();
+})().catch(e => { test('Broker suite ran without crash', () => { throw e; }); }));
+
+asyncTests.push((async () => {
+    const chat = await import('./core/chat-db.js');
+    const id1 = 'contact_test_1';
+    const id2 = 'contact_test_2';
+    const convId = 'conv_test_1';
+
+    await chat.saveContact({ id: id1, name: 'Alice', publicKey: [1, 2, 3], createdAt: 1 });
+    await chat.saveContact({ id: id2, name: 'Bob', publicKey: [4, 5, 6], createdAt: 2 });
+    const contacts = await chat.getAllContacts();
+    test('ChatDB: contacts saved and listed (isolated)', () => {
+        assert(contacts.some(c => c.id === id1) && contacts.some(c => c.id === id2), 'contacts missing');
+        assert(contacts.every(c => Array.isArray(c.publicKey)), 'publicKey not array');
+    });
+
+    await chat.saveConversation({ id: convId, name: 'Alice', contactId: id1, lastActivity: Date.now() });
+    const conv = await chat.getConversation(convId);
+    test('ChatDB: conversation saved', () => {
+        assert(conv && conv.contactId === id1, 'conversation lost');
+    });
+
+    await chat.saveMessage({ id: 'm1', conversationId: convId, sender: 'me', ciphertext: [9, 9, 9], iv: [1, 1, 1], timestamp: 100 });
+    await chat.saveMessage({ id: 'm2', conversationId: convId, sender: 'me', ciphertext: [8, 8, 8], iv: [2, 2, 2], timestamp: 200 });
+    const msgs = await chat.getMessages(convId);
+    test('ChatDB: messages stored encrypted + ordered', () => {
+        assert(msgs.length === 2, 'wrong message count');
+        assert(msgs[0].timestamp <= msgs[1].timestamp, 'not ordered');
+        assert(!('content' in msgs[0]), 'plaintext content must never be stored');
+    });
+
+    const convs = await chat.getAllConversations();
+    test('ChatDB: conversation preview stays zero-knowledge', () => {
+        assert(convs.some(c => c.id === convId && c.lastMessage === '[encrypted]'), 'preview leaks or missing');
+    });
+
+    await chat.deleteConversation(convId);
+    const after = await chat.getMessages(convId);
+    test('ChatDB: deleteConversation removes messages too', () => {
+        assert(after.length === 0, 'orphan messages remain');
+    });
+    console.log(`  (chat-db storage mode: ${chat.getChatDBMode()})`);
+})().catch(e => { test('ChatDB suite ran without crash', () => { throw e; }); }));
+
+await Promise.allSettled(asyncTests);
+
 console.log(`Results: ${passed}/${total} passed, ${failed} failed`);
 console.log(`${'═'.repeat(50)}\n`);
 

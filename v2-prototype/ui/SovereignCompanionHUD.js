@@ -29,8 +29,9 @@ class SovereignCompanionHUD extends HTMLElement {
             this.addMessage('peer', `<b>[Peer ${from.split('@')[0]}]</b>: ${plaintext}`);
         });
         
-        // Auto-connect for the prototype
-        syncBus.connect("user@sovereign", "pass");
+        // Connection is configured from the Sync settings; no auto-connect with
+        // placeholder credentials (that call could never succeed anyway).
+        this.addMessage('bot', 'Tip: connect sync from Settings > Sovereign Sync to go online.');
     }
 
     async handleInput(text) {

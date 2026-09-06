@@ -264,17 +264,28 @@ export async function getVesselsByType(type) {
 export async function getSetting(key) {
     await initSovereignDB();
     try {
-        if (useIDB()) { const r = await idbGet('settings', key); return r ? r.value : null; }
+        if (useIDB()) {
+            const r = await idbGet('settings', key);
+            if (!r || r.value === null || r.value === undefined || r.value === '') return null;
+            // Normalize both storage modes to return the parsed value.
+            if (typeof r.value === 'string') {
+                try { return JSON.parse(r.value); } catch { return r.value; }
+            }
+            return r.value;
+        }
         // OPFS: Settings stored as JSON files
         if (!await opfsFileExists(`settings/${key}.json`)) return null;
         const buf = await opfsReadFile(`settings/${key}.json`);
-        return JSON.parse(new TextDecoder().decode(buf));
+        const text = new TextDecoder().decode(buf);
+        if (!text.trim()) return null; // tolerate legacy empty files from interrupted writes
+        try { return JSON.parse(text); } catch (err) { log('warn', `getSetting: corrupt value for ${key}`, err); return null; }
     } catch (err) { log('error', 'getSetting failed', err); throw err; }
 }
 
 export async function setSetting(key, value) {
     await initSovereignDB();
     try {
+        if (value === undefined) value = null; // JSON.stringify(undefined) would create an empty file
         if (useIDB()) { await idbPut('settings', { key, value: JSON.stringify(value) }); return; }
         // OPFS
         try { await opfsRoot.getDirectoryHandle('settings', { create: true }); } catch { /* exists */ }
@@ -287,7 +298,14 @@ export async function saveVault(id, name, salt, verifier = null) {
     await initSovereignDB();
     try {
         const saltArr = salt instanceof Uint8Array ? Array.from(salt) : salt;
-        const vaultData = { id, name, salt: saltArr, verifier, createdAt: Date.now() };
+        // Serialize verifier explicitly: ArrayBuffer/Uint8Array do not survive JSON
+        // (ArrayBuffer -> "{}", Uint8Array -> index object), which destroyed the
+        // challenge-verifier on reload and forced the fallback path on every unlock.
+        const verifierArr = verifier && verifier.ciphertext && verifier.iv ? {
+            ciphertext: Array.from(new Uint8Array(verifier.ciphertext)),
+            iv: Array.from(verifier.iv)
+        } : null;
+        const vaultData = { id, name, salt: saltArr, verifier: verifierArr, createdAt: Date.now() };
         if (useIDB()) {
             await idbPut('vaults', vaultData);
         } else {
