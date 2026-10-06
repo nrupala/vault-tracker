@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nrupal Akolkar
+// SPDX-License-Identifier: MIT
+
 import { useMemo, useState, useCallback } from 'react';
 import { useItems, type DecryptedItem } from '@/lib/core';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, CheckCircle2, Target, Plus, X, FileText, CheckSquare, Activity } from 'lucide-react';

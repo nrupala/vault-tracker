@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nrupal Akolkar
+// SPDX-License-Identifier: MIT
+
 import { Shield, Github, Heart, Lock, Mic, RefreshCcw, History, Trash2, Calendar } from 'lucide-react';
 import { useVault, useSettings } from '@/lib/core';
 

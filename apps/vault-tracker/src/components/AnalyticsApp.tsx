@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nrupal Akolkar
+// SPDX-License-Identifier: MIT
+
 import { useMemo } from 'react';
 import { useItems, type DecryptedItem, deriveRecommendations, type Recommendation } from '@/lib/core';
 import { BarChart3, TrendingUp, CheckCircle2, Flame, Award, Zap, Shield, Lightbulb, ArrowUpRight } from 'lucide-react';

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nrupal Akolkar
+// SPDX-License-Identifier: MIT
+
 import { useState, useMemo, useEffect } from 'react';
 import { Plus, Download, Upload, TrendingDown, TrendingUp, Wallet, Tag, FileText, Search } from 'lucide-react';
 import { useItems, type DecryptedItem } from '@/lib/core';

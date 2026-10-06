@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nrupal Akolkar
+// SPDX-License-Identifier: MIT
+
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
 const isDev = require('electron-is-dev');

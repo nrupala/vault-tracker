@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nrupal Akolkar
+// SPDX-License-Identifier: MIT
+
 import { describe, it, expect, beforeEach } from 'vitest';
 import { encryptData, decryptData } from '@/lib/core';
 
