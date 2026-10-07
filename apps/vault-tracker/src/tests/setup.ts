@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nrupal Akolkar
+// SPDX-License-Identifier: MIT
+
 import '@testing-library/jest-dom';
 
 // Mock Web Crypto if needed (jsdom doesn't support it fully in all environments)

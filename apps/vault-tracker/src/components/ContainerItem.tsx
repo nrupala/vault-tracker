@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nrupal Akolkar
+// SPDX-License-Identifier: MIT
+
 import { useState, useEffect } from 'react';
 import { Share2, Clock, MoreVertical, Trash2, Edit2, Copy, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';

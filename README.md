@@ -67,3 +67,15 @@ In an era of "Privacy Theater," Vault Tracker is built on **Absolute Privacy by 
 ---
 Copyright © 2026 Nrupal Akolkar. Licensed under MIT.
 
+## 🛠️ Development (monorepo, pnpm workspace)
+
+```bash
+pnpm install        # install workspace dependencies (requires Node >= 20)
+pnpm -r build       # build all packages
+pnpm -r test        # run all tests
+pnpm -r lint        # lint all packages
+pnpm -r --filter vault-tracker dev   # run the vault-tracker app in dev mode
+```
+
+Build/test/lint commands are verified against the root `package.json` scripts.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the PR-flow discipline.

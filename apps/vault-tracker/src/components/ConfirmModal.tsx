@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nrupal Akolkar
+// SPDX-License-Identifier: MIT
+
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, X, AlertTriangle } from 'lucide-react';
 

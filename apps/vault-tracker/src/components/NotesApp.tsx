@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nrupal Akolkar
+// SPDX-License-Identifier: MIT
+
 import { useState, useEffect, useRef } from 'react';
 import { useItems, type DecryptedItem } from '@/lib/core';
 import { ContainerItem, type Attachment } from './ContainerItem';

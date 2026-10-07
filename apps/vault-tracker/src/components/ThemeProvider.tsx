@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nrupal Akolkar
+// SPDX-License-Identifier: MIT
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
 export type Theme = 'system' | 'light' | 'black' | 'blue' | 'sepia';

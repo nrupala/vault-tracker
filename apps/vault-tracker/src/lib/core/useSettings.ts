@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Nrupal Akolkar
+// SPDX-License-Identifier: MIT
+
 import { useState, useCallback, useEffect } from 'react';
 import { db, type VaultSettings } from './db';
 
