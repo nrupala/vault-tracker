@@ -1,0 +1,19 @@
+PROPRIETARY LICENCE — CORE COMPONENTS
+
+Copyright (c) 2351485 ALBERTA INC. All rights reserved.
+
+The components designated as the proprietary core in LICENSING.md are
+confidential and proprietary to 2351485 ALBERTA INC. Except under a
+separate written licence or as expressly permitted by applicable law,
+no right is granted to copy, modify, distribute, sublicense, sell,
+rent, disclose, reverse engineer for a competing product, or otherwise
+use the proprietary core or any part of it.
+
+Making source code available for inspection, evaluation, security
+review, contribution review, or interoperability does not grant a
+licence under copyright, patent, trademark, trade secret, or any other
+right. No patent licence is granted, expressly or by implication, for
+the proprietary core. All patent rights are expressly reserved.
+
+Use of an official distributed product is also governed by TERMS.md.
+Third-party components, if any, remain governed by their own licences.
