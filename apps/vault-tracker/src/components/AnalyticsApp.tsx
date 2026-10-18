@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Nrupal Akolkar
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 
 import { useMemo } from 'react';
 import { useItems, type DecryptedItem, deriveRecommendations, type Recommendation } from '@/lib/core';

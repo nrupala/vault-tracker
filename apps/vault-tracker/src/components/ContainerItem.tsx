@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Nrupal Akolkar
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 
 import { useState, useEffect } from 'react';
 import { Share2, Clock, MoreVertical, Trash2, Edit2, Copy, Check } from 'lucide-react';
