@@ -16,9 +16,23 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            def keystoreFile = System.getenv("VAULT_KEYSTORE_FILE")
+            if (keystoreFile) {
+                storeFile file(keystoreFile)
+                storePassword System.getenv("VAULT_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("VAULT_KEY_ALIAS") ?: "vault"
+                keyPassword System.getenv("VAULT_KEY_PASSWORD") ?: System.getenv("VAULT_KEYSTORE_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
+            if (System.getenv("VAULT_KEYSTORE_FILE")) {
+                signingConfig signingConfigs.release
+            }
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
