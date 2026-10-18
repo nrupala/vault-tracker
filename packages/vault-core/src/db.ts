@@ -2,57 +2,92 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * Zero-Trust Storage Utility
- * 
- * Uses Dexie (IndexedDB wrapper) to store encrypted payloads.
- * Nothing is stored in plaintext except non-sensitive routing or UI state ids.
+ * Zero-Trust Storage for @vault/core — public surface.
+ *
+ * Mirrors the app copy's db.ts: the live engine is SQLite (SQLCipher file
+ * on Android with a per-device Keystore-held secret; jeep-sqlite on web
+ * with per-vault AES-GCM payload sealing as the wall). The exported `db`
+ * keeps the Dexie-shaped surface the hooks were written against and
+ * delegates to the active backend. initStorage() — called once by the host
+ * app at boot — opens the SQLite store and, when legacy Dexie data exists,
+ * copies it in one transaction and verifies the copy (row counts,
+ * per-vault challenge material byte-identical by digest, item payload
+ * digest) before writing the migration marker and switching the binding.
+ * On ANY failure the binding stays on the legacy Dexie store, Dexie data
+ * is untouched, and the failure is visible via getStorageStatus(). The
+ * legacy data is NOT deleted; cleanup is a later step. (Unlike the app
+ * copy, this package has no rescue-snapshot mechanism; the untouched
+ * source + verified copy is its safety story.)
  */
-import Dexie, { type EntityTable } from 'dexie';
+import { createFacade, type BackendResolver } from './storage/facade';
+import { runMigration } from './storage/migration';
+import {
+  getActiveBackend,
+  getDexieBackend,
+  getStorageStatus,
+  setActiveBackend,
+  setStorageStatus,
+  subscribeStorageStatus,
+  MIGRATION_META_KEY,
+  STORAGE_FALLBACK_MESSAGE,
+  SqliteStoreBackend,
+  type StorageStatus,
+} from './storage/store';
 
-// A Vault represents a protected space. The salt is public and used 
-// alongside the User's master password to derive the encryption key via PBKDF2.
-export interface Vault {
-  id: string; // UUID
-  name: string; // Plaintext Name of the vault
-  salt: Uint8Array; // Public salt used for key derivation
-  challengeCiphertext: ArrayBuffer; // Used to verify password is correct
-  challengeNonce: Uint8Array; // Used to verify password is correct
-  createdAt: number;
-}
+export type { EncryptedItem, Vault } from './storage/types';
+export { getStorageStatus, subscribeStorageStatus, STORAGE_FALLBACK_MESSAGE };
+export type { StorageStatus };
 
-// All user data (Notes, Tasks, Habits) are stored here.
-// The real shape of the data is encrypted in the payload.
-export interface EncryptedItem {
-  id: string; // UUID of the item itself
-  vaultId: string; // References Vault.id
-  type: 'note' | 'task' | 'habit' | 'expense';
-  createdAt: number;
-  updatedAt: number;
-  priority: 'low' | 'medium' | 'high' | 'critical';
-  isFlagged: boolean;
-  color?: 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'gray' | 'none';
-  
-  // Tag metadata can remain in plaintext for easy filtering/querying without decryption
-  tags: string[]; 
+let initPromise: Promise<void> | null = null;
+let initDone = false;
 
-  // The actual specific data payload (e.g. Note content, Checklists, Habit streaks)
-  encryptedPayload: ArrayBuffer; 
-  nonce: Uint8Array;
-}
-
-const db = new Dexie('VaultTrackerDB') as Dexie & {
-  vaults: EntityTable<Vault, 'id'>,
-  items: EntityTable<EncryptedItem, 'id'>
+const resolveBackend: BackendResolver = () => {
+  if (initDone || !initPromise) return getActiveBackend();
+  return initPromise.then(() => getActiveBackend());
 };
 
-// Schema definition
-db.version(1).stores({
-  vaults: 'id', // Primary key
-  items: 'id, vaultId, type, createdAt, updatedAt, priority, isFlagged, *tags', // Indexed fields
-});
+/** The Dexie-shaped storage facade consumed by the hooks. */
+export const db = createFacade(resolveBackend);
 
-db.version(2).stores({
-  items: 'id, vaultId, type, createdAt, updatedAt, priority, isFlagged, color, *tags', // Added color
-});
+export function initStorage(): Promise<void> {
+  if (initPromise) return initPromise;
+  initPromise = (async () => {
+    try {
+      const sqlite = new SqliteStoreBackend();
+      await sqlite.open();
 
-export { db };
+      const marker = await sqlite.getMeta(MIGRATION_META_KEY);
+      if (marker) {
+        setActiveBackend(sqlite);
+        setStorageStatus({ backend: 'sqlite', error: null });
+        return;
+      }
+
+      const legacy = getDexieBackend();
+      const legacyCounts = await legacy.counts();
+      if (legacyCounts.vaults === 0 && legacyCounts.items === 0) {
+        await sqlite.setMeta(MIGRATION_META_KEY, `fresh:${new Date().toISOString()}`);
+        setActiveBackend(sqlite);
+        setStorageStatus({ backend: 'sqlite', error: null });
+        return;
+      }
+
+      const report = await runMigration(legacy, sqlite);
+      if (!report.ok) {
+        throw new Error(`migration verification failed: ${report.problems.join('; ')}`);
+      }
+
+      await sqlite.setMeta(MIGRATION_META_KEY, `migrated:${new Date().toISOString()}`);
+      setActiveBackend(sqlite);
+      setStorageStatus({ backend: 'sqlite', error: null });
+    } catch (e) {
+      // The binding stays on the legacy store; its data was only ever read.
+      console.error('🛡️ Storage: SQLite init/migration failed; staying on legacy storage.', e);
+      setActiveBackend(getDexieBackend());
+      setStorageStatus({ backend: 'dexie', error: STORAGE_FALLBACK_MESSAGE });
+    } finally {
+      initDone = true;
+    }
+  })();
+  return initPromise;
+}
