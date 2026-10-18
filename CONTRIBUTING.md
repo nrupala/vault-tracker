@@ -33,5 +33,6 @@ pnpm -r --filter vault-tracker dev   # run the app in dev mode
 
 ## License
 
-This project is MIT licensed (`LICENSE`). Keep the MIT header
-(`SPDX-License-Identifier: MIT`) on every source file you add.
+The open edition of this project is licensed under the Apache License 2.0
+(`LICENSE`); see `LICENSING.md` for the two-edition map. Keep the Apache-2.0
+header (`SPDX-License-Identifier: Apache-2.0`) on every source file you add.

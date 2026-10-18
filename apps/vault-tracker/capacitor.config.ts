@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.vault.tracker',
+  appId: 'com.nrupal.vaulttracker',
   appName: 'Vault Tracker',
   webDir: 'dist'
 };

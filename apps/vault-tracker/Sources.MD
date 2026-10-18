@@ -25,4 +25,4 @@ Vault Tracker is built upon the shoulders of giants in the Open Source community
 ### ⚖️ Legal
 This software is provided "as is", without warranty of any kind. 
 Copyright © 2026 Nrupal Akolkar.
-Licensed under the [MIT License](LICENSE).
+Licensed under the [Apache License 2.0](LICENSE) (open edition) — see [LICENSING.md](../../LICENSING.md).

@@ -10,7 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `CONTRIBUTING.md`: PR-flow discipline — draft PR, tests green, owner merges; no direct pushes to `main`; every PR adds a CHANGELOG entry under `[Unreleased]` and bumps semver.
 - `NOTICE.md`: project attribution (Owned by Nrupal Akolkar).
-- MIT license headers (`SPDX-License-Identifier: MIT`) on all app and package source files, matching the repo `LICENSE`.
+- Apache-2.0 license headers (`SPDX-License-Identifier: Apache-2.0`) on all app and package source files, matching the repo `LICENSE`.
 
 ### Changed
 - Bumped `apps/vault-tracker/package.json` version 1.1.8 → 1.1.9 (patch) for this certification chore PR.
+- Android identity frozen on `com.nrupal.vaulttracker`: `capacitor.config.ts` `appId` aligned with the Gradle `namespace` / `applicationId`.
+- Licensing moved to the two-edition model in `LICENSING.md`: the open edition (this repository, as published for F-Droid) is under the Apache License 2.0 with the full text in `LICENSE`; commercial editions may include proprietary components under `TERMS.md`, with patent rights in those components expressly reserved. Stale MIT claims removed from `NOTICE.md`, the READMEs, `Sources.MD`, and `CONTRIBUTING.md`.
+- `android:allowBackup` set to `false`; removed the unused google-services conditional block from the Android build (no `google-services.json` exists in this project).
+- Committed Android `versionName` is now 1.1.9 and `versionCode` 10109 (was the placeholder 1 / "1.0"); CI pins pnpm 10.34.7 instead of `latest`.

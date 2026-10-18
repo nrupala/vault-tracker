@@ -6,4 +6,4 @@ Owned by Nrupal Akolkar.
 
 ## License
 
-This project is licensed under the MIT License — see [LICENSE](LICENSE).
+The open edition of this project is licensed under the Apache License 2.0 — see [LICENSE](LICENSE) and the edition map in [LICENSING.md](LICENSING.md). Commercial editions may include proprietary components governed by [TERMS.md](TERMS.md).

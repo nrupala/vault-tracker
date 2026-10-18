@@ -33,7 +33,7 @@ Vault Tracker operates on a **Local-Only** data persistence model:
 - **Tooling**: Capacitor (Mobile), Vitest (Tests)
 
 ---
-Copyright © 2026 Nrupal Akolkar. Licensed under MIT.
+Copyright © 2026 Nrupal Akolkar. Open edition licensed under the Apache License 2.0 — see [LICENSING.md](../../LICENSING.md).
 
 
 ### Data Import Formats
