@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, Lock, KeyRound, Plus, Github, Heart } from 'lucide-react';
 import { ThemeProvider } from './components/ThemeProvider';
-import { useVault, VaultProvider, useItems } from '@/lib/core';
+import { useVault, VaultProvider, useItems, useStorageStatus } from '@/lib/core';
 import { NotesApp } from './components/NotesApp';
 import { TasksApp } from './components/TasksApp';
 import { HabitsApp } from './components/HabitsApp';
@@ -364,9 +364,23 @@ function RecoveryKeyGate() {
   return <RecoveryKeyModal onDownloadBackup={canBackup ? exportEncryptedBackup : undefined} />;
 }
 
+function StorageErrorBanner() {
+  const { error } = useStorageStatus();
+  if (!error) return null;
+  return (
+    <div
+      role="alert"
+      className="fixed inset-x-0 top-0 z-50 bg-red-600 px-4 py-2 text-center text-sm font-medium text-white shadow-lg"
+    >
+      {error}
+    </div>
+  );
+}
+
 function App() {
   return (
     <ThemeProvider>
+      <StorageErrorBanner />
       <VaultProvider>
         <MainApp />
         <RecoveryKeyGate />

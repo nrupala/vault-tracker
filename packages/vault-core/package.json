@@ -5,7 +5,10 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "dependencies": {
+    "@capacitor-community/sqlite": "8.1.1",
+    "@capacitor/core": "^8.2.0",
     "dexie": "^4.3.0",
+    "jeep-sqlite": "2.8.0",
     "uuid": "^13.0.0"
   },
   "peerDependencies": {
