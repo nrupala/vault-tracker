@@ -36,3 +36,7 @@ For external apps, the vault generates a **"One-Way Public Key"**.
 - External apps encrypt their data with this key.
 - They drop the payload into your provider's "Inbox" folder.
 - The Vault "sweeps" this folder, decrypts the contents with your **Private Key**, and incorporates them into your ledger or tasks.
+
+## Storage Standard Note (2026-10-18)
+
+The sync payload described above is a dump of the app's current local store. **Storage standard (decided 2026-10-18):** the vault family is migrating from IndexedDB (Dexie.js) to SQLite with SQLCipher — the whole database file encrypted with AES-256, keys derived from your master password and never leaving your device. Until the migration lands, the app runs on Dexie/IndexedDB with all content AES-256-GCM encrypted before it reaches the storage layer.

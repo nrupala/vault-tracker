@@ -41,6 +41,8 @@ Vault Tracker operates on a **Local-Only** data persistence model:
 3. **AES-GCM Encryption**: All content is encrypted *before* it hits the storage layer.
 4. **Decentralized Storage**: Data is saved in your browser's IndexedDB, accessible only through your master key.
 
+**Storage standard (decided 2026-10-18):** This app is migrating from IndexedDB (Dexie.js) to SQLite with SQLCipher — the whole database file encrypted with AES-256, keys derived from your master password and never leaving your device. Until the migration lands, the app runs on Dexie/IndexedDB with all content AES-256-GCM encrypted before it reaches the storage layer. Zero-knowledge throughout: we never hold your keys or your data.
+
 ## 🛡️ The Trust Manifest: Why Vault Tracker?
 
 In an era of "Privacy Theater," Vault Tracker is built on **Absolute Privacy by Architecture**. We don't ask for your trust; we make it mathematically irrelevant.
@@ -61,7 +63,7 @@ In an era of "Privacy Theater," Vault Tracker is built on **Absolute Privacy by 
 ## 🛠️ Tech Stack
 - **Frontend**: React 19, TypeScript, Vite
 - **Styling**: Vanilla CSS, Framer Motion (Animations)
-- **Engine**: Web Crypto API, Dexie.js (IndexedDB)
+- **Engine**: Web Crypto API, SQLite + SQLCipher (family standard, migration in progress)
 - **Tooling**: Capacitor (Mobile), Vitest (Tests)
 
 ---

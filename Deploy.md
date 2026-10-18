@@ -33,6 +33,6 @@ Vault Tracker is pre-configured with Capacitor.
 
 ## 💾 Backup & Data Safety
 
-Since data is stored in the browser's **IndexedDB**, it is linked to the specific browser application.
+Since data is stored in the browser's **IndexedDB**, it is linked to the specific browser application. (Storage standard decided 2026-10-18: the family is migrating to SQLite + SQLCipher; this IndexedDB guidance applies until the migration lands — see the storage-standard note in the README.)
 - **Warning**: Clearing site data or "factory resetting" your browser will delete the vault.
 - **Recommendation**: Use the **Export** feature in the Settings sidebar to periodically save encrypted backups (JSON/CSV) to an external drive.
