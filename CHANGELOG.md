@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Apache-2.0 license headers (`SPDX-License-Identifier: Apache-2.0`) on all app and package source files, matching the repo `LICENSE`.
 
 ### Changed
+- Android launcher icon: the stock Capacitor placeholder replaced with the Vault Tracker shield artwork.
 - Bumped `apps/vault-tracker/package.json` version 1.1.8 → 1.1.9 (patch) for this certification chore PR.
 - Android identity frozen on `com.nrupal.vaulttracker`: `capacitor.config.ts` `appId` aligned with the Gradle `namespace` / `applicationId`.
 - Licensing moved to the two-edition model in `LICENSING.md`: the open edition (this repository, as published for F-Droid) is under the Apache License 2.0 with the full text in `LICENSE`; commercial editions may include proprietary components under `TERMS.md`, with patent rights in those components expressly reserved. Stale MIT claims removed from `NOTICE.md`, the READMEs, `Sources.MD`, and `CONTRIBUTING.md`.
