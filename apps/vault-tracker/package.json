@@ -23,6 +23,7 @@
     "electron:dist:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {
+    "@capacitor-community/sqlite": "8.1.1",
     "@capacitor/android": "^8.2.0",
     "@capacitor/cli": "^8.2.0",
     "@capacitor/core": "^8.2.0",
