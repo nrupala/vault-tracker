@@ -21,8 +21,10 @@ repo ships exactly one app. This file now records only what is true of
 
 ## Known open items (not hidden)
 
-- **Target API**: Google Play requires target API 36 for new uploads; the
-  SDK bump is a separate, tracked change — this file does not claim it done.
+- **Target API**: `compileSdkVersion` / `targetSdkVersion` are 36 (Android 16)
+  in `android/variables.gradle`, meeting Play's target-API requirement for
+  new uploads. Device behaviour under Android 16 still needs an on-device
+  verification pass before a store submission.
 - **Play listing**: Play submission additionally requires an AAB build and
   the Console app-content pack (privacy policy URL, data-safety answers,
   content rating). Tracked outside this file.

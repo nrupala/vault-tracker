@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unit tests for the storage migration (copy + verification) and the Dexie-shaped storage facade (`src/tests/storage-migration.test.ts`); fixed `vitest.config.ts` so the `@` import alias resolves in tests — the suite previously failed at collection on every file.
 
 ### Changed
+- Android `compileSdkVersion` / `targetSdkVersion` raised 35 → 36 (Android 16) in `android/variables.gradle` — Google Play has required target API 36 for new apps and updates since 2026-08-31. Capacitor 8.x's supported target SDK is 36, so the app now matches its framework's supported level. `minSdkVersion` unchanged (23).
 - In-app version displays (About page, app shell, unlock screen) now render `__APP_VERSION__`, injected at build time from `apps/vault-tracker/package.json` — the single source of truth. Previously the About page was a hardcoded `v1.1.0` literal that stayed wrong through the 1.1.9, 1.1.10, and 1.2.0 releases.
 - Deleted the stale compiled `vite.config.js` / `vite.config.d.ts` artifacts from `apps/vault-tracker`: Vite was loading the `.js` copy, silently shadowing `vite.config.ts`. The TypeScript config is now the only config.
 - `MOBILE_AUDIT.md` corrected: it described a five-app fleet with `com.vault.*` IDs and a "100% ready" verdict that did not match this repo; it now records this app's verified state and its open Play items only.
