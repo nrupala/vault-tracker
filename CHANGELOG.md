@@ -8,7 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Version-truth gate (`apps/vault-tracker/scripts/check-version.mjs`, wired into the Android release workflow): fails the build unless `package.json` version == Gradle `versionName` == the version string in the built web assets, and fails on any hardcoded version literal in `src/`.
 - Unit tests for the storage migration (copy + verification) and the Dexie-shaped storage facade (`src/tests/storage-migration.test.ts`); fixed `vitest.config.ts` so the `@` import alias resolves in tests — the suite previously failed at collection on every file.
+
+### Changed
+- In-app version displays (About page, app shell, unlock screen) now render `__APP_VERSION__`, injected at build time from `apps/vault-tracker/package.json` — the single source of truth. Previously the About page was a hardcoded `v1.1.0` literal that stayed wrong through the 1.1.9, 1.1.10, and 1.2.0 releases.
+- Deleted the stale compiled `vite.config.js` / `vite.config.d.ts` artifacts from `apps/vault-tracker`: Vite was loading the `.js` copy, silently shadowing `vite.config.ts`. The TypeScript config is now the only config.
+- `MOBILE_AUDIT.md` corrected: it described a five-app fleet with `com.vault.*` IDs and a "100% ready" verdict that did not match this repo; it now records this app's verified state and its open Play items only.
+- README titles updated to v1.2.0 and the stale "New in v1.1.0" sections replaced with version-free feature highlights.
 - `CONTRIBUTING.md`: PR-flow discipline — draft PR, tests green, owner merges; no direct pushes to `main`; every PR adds a CHANGELOG entry under `[Unreleased]` and bumps semver.
 - `NOTICE.md`: project attribution (Owned by Nrupal Akolkar).
 - Apache-2.0 license headers (`SPDX-License-Identifier: Apache-2.0`) on all app and package source files, matching the repo `LICENSE`.

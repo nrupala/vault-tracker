@@ -1,26 +1,33 @@
-# 📱 Vault Tracker: Mobile Back-Testing Audit (v1.1.8)
+# 📱 Vault Tracker: Mobile Audit
 
-This audit confirms that all 5 ecosystem applications are technically hardened for PWA and APK deployment across all gadgets (Phones, Tablets, and Android Devices).
+**Corrected 2026-10-19.** The previous version of this file (titled "v1.1.8")
+described a five-app monorepo fleet with per-app IDs (`com.vault.tasks`,
+`com.vault.notes`, …) and declared the fleet "100% ready for multi-platform
+distribution". That record no longer matches this repository and its verdict
+was not accurate: the sibling apps live in their own repositories, and this
+repo ships exactly one app. This file now records only what is true of
+**this** app, verified against the code.
 
----
+## Vault Tracker — current state
 
-## 🏗️ Deployment Readiness
+| Item | Value | Source of truth |
+|------|-------|-----------------|
+| App | Vault Tracker (`apps/vault-tracker`) | — |
+| Version | Injected from `package.json` at build time; native `versionName` gate-checked against it (`scripts/check-version.mjs`, runs in CI) | `apps/vault-tracker/package.json` |
+| Application ID | `com.nrupal.vaulttracker` (Capacitor `appId`, Gradle `namespace`/`applicationId` — aligned) | `capacitor.config.ts`, `android/app/build.gradle` |
+| Storage | SQLite — SQLCipher-encrypted database file on Android (device key in Android Keystore), jeep-sqlite on web; item payloads AES-256-GCM under master-password-derived keys | `src/lib/core/storage/` |
+| Offline | Full offline operation; VitePWA precaching service worker; no analytics, ads, or tracker SDKs | `vite.config.ts`, `package.json` |
+| Android backup | `allowBackup="false"` | `android/app/src/main/AndroidManifest.xml` |
 
-| App | Version | Unique AppID (Capacitor) | PWA Manifest | Offline Support (Service Worker) |
-|-----|---------|-------------------------|--------------|-----------------------------------|
-| **Vault Tasks** | 1.1.8 | `com.vault.tasks` | ✅ Unique Naming | ✅ VitePWA (Precaching) |
-| **Vault Notes** | 1.1.8 | `com.vault.notes` | ✅ Unique Naming | ✅ VitePWA (Precaching) |
-| **Vault Habits** | 1.1.8 | `com.vault.habits` | ✅ Unique Naming | ✅ VitePWA (Precaching) |
-| **Vault Ledger** | 1.1.8 | `com.vault.ledger` | ✅ Unique Naming | ✅ VitePWA (Precaching) |
-| **Vault Tracker** | 1.1.8 | `com.vault.tracker` | ✅ Unique Naming | ✅ VitePWA (Precaching) |
+## Known open items (not hidden)
 
----
+- **Target API**: Google Play requires target API 36 for new uploads; the
+  SDK bump is a separate, tracked change — this file does not claim it done.
+- **Play listing**: Play submission additionally requires an AAB build and
+  the Console app-content pack (privacy policy URL, data-safety answers,
+  content rating). Tracked outside this file.
 
-## 🛠️ Technical Fixes Performed
-1.  **Identity Realignment**: Resolved a critical conflict where all apps shared the same `com.nrupal.vaulttracker` ID. Each app now has its own identity for Google Play / App Store submission.
-2.  **Ecosystem Synchronization**: Bumped all apps from v1.1.0 to **v1.1.8** to align with the new **Sovereign Sync v2** and **Resilience Hub v3**.
-3.  **Manifest Hardening**: Updated `manifest.json` for each app to include premium `theme_colors` (Green for Tasks, Blue for Habits, Indigo for Ledger, etc.) and `standalone` display modes.
-4.  **Offline-First Strategy**: Verified that `VitePWA` is configured for **AutoUpdate** and **GenerateSW**, ensuring complete offline operation on iOS/Android gadgets.
-
----
-**Verdict**: The fleet is 100% ready for multi-platform distribution.
+**Verdict**: Vault Tracker is a single offline Android/web app with a frozen
+identity and a gate-checked version story. It is **not** described as
+store-ready here until the target-API and AAB items above are closed and
+verified on a device.
