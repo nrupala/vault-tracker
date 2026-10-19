@@ -44,6 +44,9 @@ jobs:
       - name: Install Dependencies
         run: pnpm install
 
+      - name: Version truth gate (source)
+        run: node apps/vault-tracker/scripts/check-version.mjs
+
       - name: Build Vault Ecosystem
         run: pnpm -r build
 
@@ -55,6 +58,9 @@ jobs:
           npx cap sync android
           # Verification: Check if the built assets contain the new Paperclip logic
           grep -i "Paperclip" android/app/src/main/assets/public/assets/*.js || echo "WARNING: Paperclip logic not found in synced assets!"
+
+      - name: Version truth gate (built assets)
+        run: node apps/vault-tracker/scripts/check-version.mjs --assets apps/vault-tracker/android/app/src/main/assets/public
 
       - name: Decode release keystore
         run: |

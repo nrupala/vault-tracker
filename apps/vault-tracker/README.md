@@ -1,4 +1,4 @@
-# 🛡️ Vault Tracker v1.1.0
+# 🛡️ Vault Tracker v1.2.0
 
 **Zero-Trust. Zero-Knowledge. 100% Private.**
 
@@ -14,10 +14,10 @@ Experience the full suite or use focused mini-apps for specific workflows:
 
 ![Vault Tracker Icon](public/icon-512.png)
 
-## ✨ New in v1.1.0
+## ✨ Feature highlights
 - **📱 Mobile Maturity**: High-fidelity PWA support with `viewport-fit=cover` for iOS/Android notch support and standalone native builds.
 - **🔄 Universal Data Import**: Seamlessly import data from **JSON**, **Plain Text**, and **iCalendar (.ics)** formats directly into your encrypted vaults.
-- **🔢 Version Tracking**: Official versioning now visible in-app (v1.1.0).
+- **🔢 Version Tracking**: The version shown in-app is injected from `package.json` at build time and gate-checked against the native `versionName`, so it always matches the installed release.
 
 ## 🔒 The Zero-Trust Model
 Vault Tracker operates on a **Local-Only** data persistence model:

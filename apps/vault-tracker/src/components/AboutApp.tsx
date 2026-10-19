@@ -13,7 +13,7 @@ export function AboutApp() {
         <div className="inline-flex p-4 bg-primary/10 rounded-3xl mb-4">
           <Shield className="w-16 h-16 text-primary" />
         </div>
-        <h2 className="text-4xl font-black tracking-tighter">Vault Tracker v1.1.0</h2>
+        <h2 className="text-4xl font-black tracking-tighter">Vault Tracker v{__APP_VERSION__}</h2>
         <p className="text-muted-foreground max-w-md mx-auto leading-relaxed">
           Sync with Your Keys. Retain Your Sovereignty.. High-fidelity mobile experience with cross-format data portability.
         </p>

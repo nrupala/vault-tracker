@@ -103,7 +103,7 @@ export function AppShell({ children, activeTab, onTabChange }: AppShellProps) {
             </div>
             <div className="flex flex-col">
               <span className="font-bold text-lg tracking-tight">Vault</span>
-              <span className="text-[10px] text-muted-foreground font-mono">v1.1.0</span>
+              <span className="text-[10px] text-muted-foreground font-mono">v{__APP_VERSION__}</span>
             </div>
           </div>
           <button onClick={toggleSidebar} className="md:hidden p-1 rounded-md hover:bg-secondary">
