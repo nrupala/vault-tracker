@@ -81,6 +81,16 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease
 
+      - name: Build signed release AAB
+        env:
+          VAULT_KEYSTORE_FILE: ${{ runner.temp }}/vault-release.p12
+          VAULT_KEYSTORE_PASSWORD: ${{ secrets.VAULT_KEYSTORE_PASSWORD }}
+          VAULT_KEY_ALIAS: vault
+        run: |
+          cd apps/vault-tracker/android
+          chmod +x gradlew
+          ./gradlew bundleRelease
+
       - name: Verify APK signature
         run: |
           APK=apps/vault-tracker/android/app/build/outputs/apk/release/app-release.apk
@@ -94,11 +104,29 @@ jobs:
             exit 1
           fi
 
+      - name: Verify AAB signature
+        run: |
+          AAB=apps/vault-tracker/android/app/build/outputs/bundle/release/app-release.aab
+          keytool -printcert -jarfile "$AAB" | tee /tmp/aab-certs.txt
+          ACTUAL=$(grep -i "SHA256:" /tmp/aab-certs.txt | head -1 | awk '{print $NF}' | tr -d ':' | tr 'A-F' 'a-f')
+          EXPECTED=$(echo "${{ vars.VAULT_CERT_SHA256 }}" | tr -d ':' | tr 'A-F' 'a-f')
+          echo "aab signer sha256: $ACTUAL"
+          if [ -z "$ACTUAL" ] || [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "AAB signer certificate mismatch - refusing this build" >&2
+            exit 1
+          fi
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: vault-tracker-release
           path: apps/vault-tracker/android/app/build/outputs/apk/release/app-release.apk
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: vault-tracker-aab
+          path: apps/vault-tracker/android/app/build/outputs/bundle/release/app-release.aab
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
