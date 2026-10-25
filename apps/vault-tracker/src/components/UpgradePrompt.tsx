@@ -5,15 +5,15 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, X, Check } from 'lucide-react';
 import type { ModuleType } from '../lib/core/license';
+import { getProCheckoutUrl, PRO_PRICE_LABEL } from '../lib/core/checkout';
 
 /**
- * TODO(store): replace with the real LemonSqueezy checkout URL once the store and
- * the "$29 one-time Pro" variant exist. Pricing decided 2026-07-22: $29 one-time
- * (perpetual license, not a subscription). The offline Ed25519 license check lands
- * in Phase 3 (see lib/core/license.ts).
+ * The upgrade destination lives in lib/core/checkout.ts — the fleet's own
+ * AIMLDS Stripe gateway (owner ruling 2026-10-22). While no Vault Tracker
+ * payment link exists, checkout is closed and this prompt renders no
+ * checkout action at all (see checkout.ts). The offline Ed25519 license
+ * check lands in Phase 3 (see lib/core/license.ts).
  */
-const LEMONSQUEEZY_CHECKOUT_URL = 'https://vault-tracker.lemonsqueezy.com/buy/REPLACE_WITH_VARIANT_ID';
-const PRO_PRICE_LABEL = '$29 one-time';
 
 const MODULE_LABELS: Record<ModuleType, string> = {
   note: 'notes',
@@ -48,6 +48,7 @@ export function UpgradePrompt() {
 
   const moduleLabel = detail ? MODULE_LABELS[detail.moduleType] ?? `${detail.moduleType}s` : 'items';
   const limit = detail?.limit ?? 100;
+  const checkoutUrl = getProCheckoutUrl();
 
   const close = () => setOpen(false);
 
@@ -105,15 +106,17 @@ export function UpgradePrompt() {
               >
                 Maybe later
               </button>
-              <a
-                href={LEMONSQUEEZY_CHECKOUT_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={close}
-                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-center"
-              >
-                Upgrade — {PRO_PRICE_LABEL}
-              </a>
+              {checkoutUrl && (
+                <a
+                  href={checkoutUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={close}
+                  className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-center"
+                >
+                  Upgrade — {PRO_PRICE_LABEL}
+                </a>
+              )}
             </div>
           </motion.div>
         </motion.div>
