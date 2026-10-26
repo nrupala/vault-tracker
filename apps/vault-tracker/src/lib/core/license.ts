@@ -59,6 +59,31 @@ export function isPro(): boolean {
 }
 
 /**
+ * Activate Pro with an activation code (v1, 2026-10-26 — the Stripe
+ * direct channel). After paying through the fleet Stripe Payment
+ * Link, Stripe lands the buyer on the activation page, which shows
+ * this code (their checkout session id; it also appears in their
+ * Stripe receipt trail). Entering it here writes the licence token
+ * this module reads. This is the presence-check v1 described in the
+ * header: the code is stored on the token so Phase 3 can swap the
+ * check for offline Ed25519 verification of a signed token without
+ * changing this function's callers.
+ */
+export function activatePro(activationCode: string): boolean {
+  const code = (activationCode || '').trim();
+  if (code.length < 8) return false;
+  try {
+    localStorage.setItem(
+      LICENSE_STORAGE_KEY,
+      JSON.stringify({ plan: 'pro', activatedWith: code, activatedAt: new Date().toISOString() })
+    );
+    return getEntitlement() === 'pro';
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Fired when a free-tier user hits the per-module cap so a global UI listener can
  * show the upgrade prompt regardless of which module triggered it.
  */
