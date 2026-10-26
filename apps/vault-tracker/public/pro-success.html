@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vault Tracker Pro — payment received</title>
+<style>
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#0b0e14; color:#e6e9ef; display:flex; min-height:100vh; align-items:center; justify-content:center; padding:1.25rem; box-sizing:border-box; }
+  .card { max-width:34rem; width:100%; background:#141926; border:1px solid #232b3d; border-radius:1rem; padding:1.75rem; box-sizing:border-box; }
+  h1 { font-size:1.35rem; margin:0 0 .5rem; }
+  p { line-height:1.55; color:#aeb6c4; font-size:.95rem; }
+  .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break:break-all; background:#0b0e14; border:1px solid #232b3d; border-radius:.75rem; padding:.9rem 1rem; color:#fff; font-size:.9rem; }
+  button { margin-top:.6rem; padding:.55rem 1.1rem; border-radius:.7rem; border:0; background:#3b82f6; color:#fff; font-weight:600; cursor:pointer; }
+  ol { color:#aeb6c4; line-height:1.6; font-size:.95rem; padding-left:1.2rem; }
+  .small { font-size:.82rem; color:#7c8698; }
+  a { color:#7db4ff; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Payment received — thank you!</h1>
+    <p>You bought <strong style="color:#fff">Vault Tracker Pro</strong> (one-time, yours forever — no subscription). One step left: activate Pro in the app with this code.</p>
+    <p style="margin-bottom:.3rem"><strong style="color:#fff">Your activation code</strong></p>
+    <div class="code" id="code">Looking up your code…</div>
+    <button id="copy" type="button">Copy code</button>
+    <ol>
+      <li>Open Vault Tracker (any build — web, Android, or desktop).</li>
+      <li>Add entries until the upgrade prompt appears, or open it from the free-limit notice.</li>
+      <li>Paste the code into <em>“Already paid?”</em> and tap <strong>Activate</strong>.</li>
+    </ol>
+    <p class="small">Keep this code — it is your proof of purchase together with your Stripe receipt (the code is your Stripe checkout reference). If anything goes wrong, email <a href="mailto:info@aimlds.org">info@aimlds.org</a> with your receipt and we will sort it the same day. Sold by 2351485 ALBERTA INC. (AIMLDS) · Payments by Stripe.</p>
+  </div>
+<script>
+  var session = new URLSearchParams(location.search).get('session') || '';
+  var el = document.getElementById('code');
+  if (session) {
+    el.textContent = session;
+  } else {
+    el.textContent = 'Your code is the checkout reference (starts with cs_) in your Stripe confirmation and receipt email.';
+    document.getElementById('copy').style.display = 'none';
+  }
+  document.getElementById('copy').addEventListener('click', function () {
+    if (session && navigator.clipboard) navigator.clipboard.writeText(session);
+    this.textContent = 'Copied';
+  });
+</script>
+</body>
+</html>

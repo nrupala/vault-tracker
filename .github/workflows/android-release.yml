@@ -49,8 +49,13 @@ jobs:
 
       - name: Build Vault Ecosystem
         run: pnpm -r build
+        env:
+          # Play channel: Android builds carry NO web checkout link (Play Billing policy; F-1 rewire, 2026-10-26).
+          VITE_BUILD_CHANNEL: play
 
       - name: Sync & Build Capacitor
+        env:
+          VITE_BUILD_CHANNEL: play
         run: |
           pnpm --filter vault-tracker build
           cd apps/vault-tracker

@@ -41,6 +41,8 @@ jobs:
         run: pnpm -r build
         env:
           VITE_BASE_URL: /vault-tracker/
+          # Direct channel: the web build sells Pro through the fleet Stripe Payment Link (F-1 rewire, 2026-10-26).
+          VITE_BUILD_CHANNEL: direct
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
