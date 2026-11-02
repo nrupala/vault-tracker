@@ -106,7 +106,7 @@ importers:
         specifier: ^10.4.27
         version: 10.4.27(postcss@8.5.8)
       concurrently:
-        specifier: ^9.2.4
+        specifier: ^9.2.5
         version: 9.2.5
       electron:
         specifier: ^42.11.16
