@@ -1,0 +1,139 @@
+name: Build Android APK (hosted backup)
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.7
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+
+      - name: Cache pnpm modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: Install Dependencies
+        run: pnpm install
+
+      - name: Version truth gate (source)
+        run: node apps/vault-tracker/scripts/check-version.mjs
+
+      - name: Build Vault Ecosystem
+        run: pnpm -r build
+        env:
+          # Play channel: Android builds carry NO web checkout link (Play Billing policy; F-1 rewire, 2026-10-26).
+          VITE_BUILD_CHANNEL: play
+
+      - name: Sync & Build Capacitor
+        env:
+          VITE_BUILD_CHANNEL: play
+        run: |
+          pnpm --filter vault-tracker build
+          cd apps/vault-tracker
+          rm -rf android/app/src/main/assets/public/*
+          npx cap sync android
+          # Verification: Check if the built assets contain the new Paperclip logic
+          grep -i "Paperclip" android/app/src/main/assets/public/assets/*.js || echo "WARNING: Paperclip logic not found in synced assets!"
+
+      - name: Version truth gate (built assets)
+        run: node apps/vault-tracker/scripts/check-version.mjs --assets apps/vault-tracker/android/app/src/main/assets/public
+
+      - name: Decode release keystore
+        run: |
+          if [ -z "${{ secrets.VAULT_KEYSTORE_BASE64 }}" ]; then
+            echo "VAULT_KEYSTORE_BASE64 secret is missing - release builds must be signed" >&2
+            exit 1
+          fi
+          echo "${{ secrets.VAULT_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/vault-release.p12"
+          ls -l "$RUNNER_TEMP/vault-release.p12"
+
+      - name: Build signed release APK
+        env:
+          VAULT_KEYSTORE_FILE: ${{ runner.temp }}/vault-release.p12
+          VAULT_KEYSTORE_PASSWORD: ${{ secrets.VAULT_KEYSTORE_PASSWORD }}
+          VAULT_KEY_ALIAS: vault
+        run: |
+          cd apps/vault-tracker/android
+          chmod +x gradlew
+          ./gradlew assembleRelease
+
+      - name: Build signed release AAB
+        env:
+          VAULT_KEYSTORE_FILE: ${{ runner.temp }}/vault-release.p12
+          VAULT_KEYSTORE_PASSWORD: ${{ secrets.VAULT_KEYSTORE_PASSWORD }}
+          VAULT_KEY_ALIAS: vault
+        run: |
+          cd apps/vault-tracker/android
+          chmod +x gradlew
+          ./gradlew bundleRelease
+
+      - name: Verify APK signature
+        run: |
+          APK=apps/vault-tracker/android/app/build/outputs/apk/release/app-release.apk
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --print-certs "$APK" | tee /tmp/certs.txt
+          ACTUAL=$(grep "SHA-256 digest" /tmp/certs.txt | head -1 | awk '{print $NF}' | tr -d ':' | tr 'A-F' 'a-f')
+          EXPECTED=$(echo "${{ vars.VAULT_CERT_SHA256 }}" | tr -d ':' | tr 'A-F' 'a-f')
+          echo "signer sha256: $ACTUAL"
+          if [ -z "$ACTUAL" ] || [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "Signer certificate mismatch - refusing this build" >&2
+            exit 1
+          fi
+
+      - name: Verify AAB signature
+        run: |
+          AAB=apps/vault-tracker/android/app/build/outputs/bundle/release/app-release.aab
+          keytool -printcert -jarfile "$AAB" | tee /tmp/aab-certs.txt
+          ACTUAL=$(grep -i "SHA256:" /tmp/aab-certs.txt | head -1 | awk '{print $NF}' | tr -d ':' | tr 'A-F' 'a-f')
+          EXPECTED=$(echo "${{ vars.VAULT_CERT_SHA256 }}" | tr -d ':' | tr 'A-F' 'a-f')
+          echo "aab signer sha256: $ACTUAL"
+          if [ -z "$ACTUAL" ] || [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "AAB signer certificate mismatch - refusing this build" >&2
+            exit 1
+          fi
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: vault-tracker-release
+          path: apps/vault-tracker/android/app/build/outputs/apk/release/app-release.apk
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: vault-tracker-aab
+          path: apps/vault-tracker/android/app/build/outputs/bundle/release/app-release.aab
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp apps/vault-tracker/android/app/build/outputs/apk/release/app-release.apk "vault-tracker-${{ github.ref_name }}.apk"
+          gh release create "${{ github.ref_name }}" "vault-tracker-${{ github.ref_name }}.apk" --title "Vault Tracker ${{ github.ref_name }}" --generate-notes
