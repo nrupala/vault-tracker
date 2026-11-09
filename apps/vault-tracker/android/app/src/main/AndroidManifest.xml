@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="false"
@@ -34,5 +35,11 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
     </application>
+
+    <!-- F-2 (Director ruling 2026-11-09, Decision Queue #10): Vault Tracker is an
+         offline, zero-knowledge product and never uses the network. The INTERNET
+         permission is not declared, and this merger marker keeps it out of the
+         merged manifest even if a library dependency ever injects it. -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
 
 </manifest>
