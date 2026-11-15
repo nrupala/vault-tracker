@@ -1,0 +1,19 @@
+name: Request an improvement
+description: Suggest a feature or improvement for Vault Tracker.
+title: "[Idea] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like Vault Tracker to do?
+      description: Describe the improvement and what it would help you accomplish.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else?
+      description: Optional context. Please do not include personal financial details.
+    validations:
+      required: false
