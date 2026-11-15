@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Support by email
+    url: mailto:info@aimlds.org
+    about: Prefer email? Write to info@aimlds.org.
+  - name: Privacy policy
+    url: https://nrupala.github.io/vault-tracker/privacy.html
+    about: What the app does with your information (short version — it collects nothing).
