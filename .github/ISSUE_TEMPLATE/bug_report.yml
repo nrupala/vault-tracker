@@ -1,0 +1,38 @@
+name: Report a problem
+description: Tell us what went wrong in Vault Tracker. Submissions land in this repo's issue tracker and are triaged nightly.
+title: "[Problem] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. This form is user-initiated only — nothing is sent anywhere until you press Submit.
+        **Please do not attach your vault export or any file containing your personal entries** unless a maintainer explicitly asks and you choose to share it.
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened?
+      description: Describe the problem and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: What were you doing, step by step, when it happened?
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Shown in the app under About (for example 1.2.0).
+    validations:
+      required: false
+  - type: input
+    id: device
+    attributes:
+      label: Device and Android version
+      description: For example "Pixel 8, Android 15". Leave blank if you are using the web version.
+    validations:
+      required: false
